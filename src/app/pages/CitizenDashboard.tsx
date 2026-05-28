@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Shield, AlertCircle, Crosshair, QrCode, ArrowRightLeft, Clock, ChevronRight, FileText } from "lucide-react";
+import { CitizenMedicalNavIcon } from "../components/citizen/CitizenMedicalNavIcon";
 import { CitizenApplicationCard } from "../components/citizen/CitizenApplicationCard";
 import { cn } from "../components/ui/utils";
 import { DateStatusMeta } from "../components/DateStatusMeta";
 import { citizenService } from "../../services/citizenService";
-import type { CitizenProfileDto, PermitDto, PermitApplicationDto, PromiseApplicationDto } from "../../types/api";
+import type { CitizenMedicalAlertDto, CitizenProfileDto, PermitDto, PermitApplicationDto, PromiseApplicationDto } from "../../types/api";
+import { mapPermitExamEntries, worstExamStatus } from "../../lib/permitExams";
 import { getApplicationStatusMeta } from "../../lib/statusUi";
 import { CITIZEN_NAV_ICON_TONE } from "../utils/citizenCardUi";
 
@@ -48,20 +50,23 @@ export function CitizenDashboard() {
   const [permits, setPermits] = useState<PermitDto[]>([]);
   const [recentApps, setRecentApps] = useState<RecentEntry[]>([]);
   const [permitApps, setPermitApps] = useState<PermitApplicationDto[]>([]);
+  const [medicalAlerts, setMedicalAlerts] = useState<CitizenMedicalAlertDto[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [profileRes, permitsRes, permitAppsRes, promiseAppsRes] = await Promise.all([
+        const [profileRes, permitsRes, permitAppsRes, promiseAppsRes, alertsRes] = await Promise.all([
           citizenService.getProfile(),
           citizenService.getPermits(),
           citizenService.getPermitApplications(),
           citizenService.getPromiseApplications(),
+          citizenService.getMedicalAlerts(),
         ]);
         setProfile(profileRes);
         setPermits(permitsRes);
         setPermitApps(permitAppsRes);
+        setMedicalAlerts(alertsRes);
         const combined: RecentEntry[] = [
           ...permitAppsRes.map<RecentEntry>((data) => ({ kind: "permit", data })),
           ...promiseAppsRes.map<RecentEntry>((data) => ({ kind: "promise", data })),
@@ -95,6 +100,8 @@ export function CitizenDashboard() {
   const correctionApps = permitApps.filter(
     (app) => app.statusName === "RequiresCorrection" && app.id !== activePermitApplication?.id
   );
+  const examEntries = useMemo(() => mapPermitExamEntries(permits, medicalAlerts), [permits, medicalAlerts]);
+  const examAttentionStatus = useMemo(() => worstExamStatus(examEntries), [examEntries]);
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString("pl-PL", { day: "numeric", month: "short", year: "numeric" });
@@ -284,7 +291,7 @@ export function CitizenDashboard() {
             { label: "Rejestr broni", icon: Crosshair, path: "/weapons" },
             { label: "Moje wnioski", icon: FileText, path: "/applications" },
             { label: "Transfery", icon: ArrowRightLeft, path: "/transfers" },
-            { label: "Badania", icon: AlertCircle, path: "/medical-alerts" },
+            { label: "Badania", path: "/medical-alerts" },
           ].map(({ label, icon: Icon, path }) => (
             <Card
               key={path}
@@ -292,9 +299,13 @@ export function CitizenDashboard() {
               onClick={() => navigate(path)}
             >
               <CardContent className="p-4 flex flex-col items-center justify-center text-center gap-2 h-[100px]">
-                <div className={cn("p-3 rounded-2xl mb-1", CITIZEN_NAV_ICON_TONE)}>
-                  <Icon className="h-6 w-6" />
-                </div>
+                {path === "/medical-alerts" ? (
+                  <CitizenMedicalNavIcon status={examAttentionStatus} />
+                ) : (
+                  <div className={cn("p-3 rounded-2xl mb-1 relative", CITIZEN_NAV_ICON_TONE)}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                )}
                 <span className="text-xs font-semibold leading-tight">{label}</span>
               </CardContent>
             </Card>
@@ -329,7 +340,11 @@ export function CitizenDashboard() {
                   title={title}
                   date={formatDate(entry.data.createdAt)}
                   statusBadge={renderStatusBadge(entry.data.statusName)}
-                  onClick={() => navigate("/applications")}
+                  onClick={() =>
+                    navigate(
+                      `/applications/${entry.data.id}?type=${isPermit ? "permit" : "promise"}`,
+                    )
+                  }
                 />
               );
             })}

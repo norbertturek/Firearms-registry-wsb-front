@@ -4,6 +4,7 @@ import type {
   WpaPermitApplicationDto,
   WpaPromiseApplicationDto,
   ApprovePermitApplicationRequest,
+  UpdatePermitApplicationExamDatesRequest,
   RejectApplicationRequest,
   RequireCorrectionRequest,
   WpaFirearmSearchResult,
@@ -56,8 +57,11 @@ export const wpaService = {
     return api.get<WpaPermitApplicationDto>(`/wpa/permit-applications/${id}`);
   },
 
-  async markPermitApplicationUnderReview(id: string): Promise<void> {
-    return api.post<void>(`/wpa/permit-applications/${id}/mark-under-review`);
+  async markPermitApplicationUnderReview(
+    id: string,
+    data?: UpdatePermitApplicationExamDatesRequest,
+  ): Promise<void> {
+    return api.post<void>(`/wpa/permit-applications/${id}/mark-under-review`, data);
   },
 
   async approvePermitApplication(id: string, data: ApprovePermitApplicationRequest): Promise<void> {

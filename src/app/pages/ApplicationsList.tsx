@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -15,11 +14,9 @@ import { citizenService } from "../../services/citizenService";
 import { wpaService } from "../../services/wpaService";
 import { canApplyForPromise } from "../utils/permitEligibility";
 import { PermitRequiredForPromiseNotice } from "../components/citizen/PermitRequiredForPromiseNotice";
-import {
-  ApplicationListTile,
-  getDecisionActionLabel,
-  isNewForVerification,
-} from "../components/wpa/ApplicationListTile";
+import { getPermitApplicationTypeLabel } from "../utils/permitLabels";
+import { ApplicationListTile } from "../components/wpa/ApplicationListTile";
+import { WpaListSectionHeader } from "../components/wpa/WpaListSectionHeader";
 import { PromiseQrModal } from "../components/citizen/PromiseQrModal";
 import { getPromiseQrMatchResult } from "../../lib/promiseQrAvailability";
 import { getApplicationStatusMeta } from "../../lib/statusUi";
@@ -69,11 +66,6 @@ function isWpaPermit(a: AnyPermit): a is WpaPermitApplicationDto {
 
 function isWpaPromise(a: AnyPromise): a is WpaPromiseApplicationDto {
   return "citizenName" in a;
-}
-
-function getPermitTypeLabel(app: AnyPermit) {
-  const typeName = app.requestedPermitTypeName || String(app.requestedPermitType);
-  return PERMIT_TYPE_LABELS[typeName] ?? typeName;
 }
 
 type ApplicationSearchBy = "all" | "citizen" | "pesel" | "type" | "reason";
@@ -147,7 +139,7 @@ export function ApplicationsList() {
   const filterPermit = (apps: AnyPermit[]) =>
     apps.filter((a) => {
       const search = searchTerm.toLowerCase();
-      const typeName = getPermitTypeLabel(a);
+      const typeName = getPermitApplicationTypeLabel(a);
       const matchSearch = matchApplicationSearch(search, {
         id: a.id,
         typeLabel: typeName,
@@ -312,80 +304,54 @@ export function ApplicationsList() {
 
         <TabsContent value="permits" className="mt-0">
           {isOfficer ? (
-            <Card className="rounded-2xl border-none shadow-sm">
-              <CardHeader className="px-4 pt-4 pb-2 md:px-6 md:pt-6 md:pb-3">
-                <CardTitle className="text-base md:text-lg">Wnioski o pozwolenie</CardTitle>
-                <CardDescription className="text-xs md:text-sm">Wszyscy wnioskodawcy</CardDescription>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
-                {filteredPermit.length > 0 ? (
-                  <div className="space-y-2 md:space-y-3">
-                    {filteredPermit.map((app) => {
-                      const isNew = isNewForVerification("permit", app.statusName);
-                      const lines = isWpaPermit(app)
-                        ? [`Wnioskodawca: ${app.citizenName}`, `PESEL: ${app.citizenPesel}`]
-                        : [app.reason];
+            <div className="space-y-3">
+              <WpaListSectionHeader
+                title="Wnioski o pozwolenie"
+                description="Wszyscy wnioskodawcy"
+              />
+              {filteredPermit.length > 0 ? (
+                <div className="space-y-3">
+                  {filteredPermit.map((app) => {
+                    const lines = isWpaPermit(app)
+                      ? [`Wnioskodawca: ${app.citizenName}`, `PESEL: ${app.citizenPesel}`]
+                      : [app.reason];
 
-                      return (
-                        <ApplicationListTile
-                          key={app.id}
-                          icon={<Shield />}
-                          title={`Pozwolenie — ${getPermitTypeLabel(app)}`}
-                          lines={lines}
-                          date={formatDate(app.createdAt)}
-                          statusBadge={getStatusBadge(app.statusName)}
-                          highlight={isNew}
-                          onClick={() => navigate(`/applications/${app.id}?type=permit`)}
-                          headerBadge={isNew ? (
-                            <Badge className="bg-blue-600 hover:bg-blue-600 text-white border-none rounded-full px-1.5 md:px-2 py-0.5 text-[10px] md:text-[11px] shrink-0">
-                              Nowy
-                            </Badge>
-                          ) : undefined}
-                          actions={
-                            <>
-                              <Button
-                                onClick={() => navigate(`/decision/${app.id}?type=permit`)}
-                                className="min-h-[44px] rounded-xl flex-1 lg:flex-none text-sm"
-                              >
-                                {getDecisionActionLabel("permit", app.statusName)}
-                              </Button>
-                              <Button
-                                onClick={() => navigate(`/applications/${app.id}?type=permit`)}
-                                variant="outline"
-                                className="hidden md:flex min-h-[44px] rounded-xl flex-1 lg:flex-none text-sm"
-                              >
-                                Szczegóły
-                              </Button>
-                            </>
-                          }
-                        />
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                    {hasActiveQuery ? (
-                      <>
-                        <p className="mb-3">Brak wniosków dla wybranych kryteriów</p>
-                        <Button variant="outline" className="rounded-xl min-h-[44px]" onClick={clearSearchAndFilters} aria-label="Wyczyść filtry">
-                          Wyczyść filtry
-                        </Button>
-                      </>
-                    ) : (
-                      <p className="mb-3">Brak wniosków o pozwolenie</p>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                    return (
+                      <ApplicationListTile
+                        key={app.id}
+                        icon={<Shield />}
+                        title={`Pozwolenie — ${getPermitApplicationTypeLabel(app)}`}
+                        lines={lines}
+                        date={formatDate(app.createdAt)}
+                        statusBadge={getStatusBadge(app.statusName)}
+                        onClick={() => navigate(`/applications/${app.id}?type=permit`)}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground rounded-2xl bg-muted/20">
+                  <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" aria-hidden />
+                  {hasActiveQuery ? (
+                    <>
+                      <p className="mb-3">Brak wniosków dla wybranych kryteriów</p>
+                      <Button variant="outline" className="rounded-xl min-h-[44px]" onClick={clearSearchAndFilters} aria-label="Wyczyść filtry">
+                        Wyczyść filtry
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="mb-3">Brak wniosków o pozwolenie</p>
+                  )}
+                </div>
+              )}
+            </div>
           ) : filteredPermit.length > 0 ? (
             <div className="space-y-3">
               {filteredPermit.map((app) => (
                 <CitizenApplicationCard
                   key={app.id}
                   variant="permit"
-                  title={`Wniosek o pozwolenie — ${getPermitTypeLabel(app)}`}
+                  title={`Wniosek o pozwolenie — ${getPermitApplicationTypeLabel(app)}`}
                   subtitle={app.reason}
                   date={formatDate(app.createdAt)}
                   statusBadge={getStatusBadge(app.statusName)}
@@ -444,73 +410,47 @@ export function ApplicationsList() {
           )}
 
           {isOfficer ? (
-            <Card className="rounded-2xl border-none shadow-sm">
-              <CardHeader className="px-4 pt-4 pb-2 md:px-6 md:pt-6 md:pb-3">
-                <CardTitle className="text-base md:text-lg">Wnioski o e-Promesę</CardTitle>
-                <CardDescription className="text-xs md:text-sm">Wszyscy wnioskodawcy</CardDescription>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
-                {filteredPromise.length > 0 ? (
-                  <div className="space-y-2 md:space-y-3">
-                    {filteredPromise.map((app) => {
-                      const isNew = isNewForVerification("promise", app.statusName);
-                      const lines = isWpaPromise(app)
-                        ? [`Wnioskodawca: ${app.citizenName}`, `PESEL: ${app.citizenPesel}`, `Pozwolenie: ${app.permitNumber} · Ilość: ${app.requestedQuantity}`]
-                        : [`Pozwolenie: ${app.permitNumber} · Ilość: ${app.requestedQuantity}`];
+            <div className="space-y-3">
+              <WpaListSectionHeader
+                title="Wnioski o e-Promesę"
+                description="Wszyscy wnioskodawcy"
+              />
+              {filteredPromise.length > 0 ? (
+                <div className="space-y-3">
+                  {filteredPromise.map((app) => {
+                    const lines = isWpaPromise(app)
+                      ? [`Wnioskodawca: ${app.citizenName}`, `PESEL: ${app.citizenPesel}`, `Pozwolenie: ${app.permitNumber} · Ilość: ${app.requestedQuantity}`]
+                      : [`Pozwolenie: ${app.permitNumber} · Ilość: ${app.requestedQuantity}`];
 
-                      return (
-                        <ApplicationListTile
-                          key={app.id}
-                          icon={<CreditCard />}
-                          title={app.requestedWeaponType}
-                          lines={lines}
-                          date={formatDate(app.createdAt)}
-                          statusBadge={getStatusBadge(app.statusName)}
-                          highlight={isNew}
-                          onClick={() => navigate(`/applications/${app.id}?type=promise`)}
-                          headerBadge={isNew ? (
-                            <Badge className="bg-blue-600 hover:bg-blue-600 text-white border-none rounded-full px-1.5 md:px-2 py-0.5 text-[10px] md:text-[11px] shrink-0">
-                              Nowy
-                            </Badge>
-                          ) : undefined}
-                          actions={
-                            <>
-                              <Button
-                                onClick={() => navigate(`/decision/${app.id}?type=promise`)}
-                                className="min-h-[44px] rounded-xl flex-1 lg:flex-none text-sm"
-                              >
-                                {getDecisionActionLabel("promise", app.statusName)}
-                              </Button>
-                              <Button
-                                onClick={() => navigate(`/applications/${app.id}?type=promise`)}
-                                variant="outline"
-                                className="hidden md:flex min-h-[44px] rounded-xl flex-1 lg:flex-none text-sm"
-                              >
-                                Szczegóły
-                              </Button>
-                            </>
-                          }
-                        />
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                    {hasActiveQuery ? (
-                      <>
-                        <p className="mb-3">Brak wniosków dla wybranych kryteriów</p>
-                        <Button variant="outline" className="rounded-xl min-h-[44px]" onClick={clearSearchAndFilters} aria-label="Wyczyść filtry">
-                          Wyczyść filtry
-                        </Button>
-                      </>
-                    ) : (
-                      <p className="mb-3">Brak wniosków o promesę</p>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                    return (
+                      <ApplicationListTile
+                        key={app.id}
+                        icon={<CreditCard />}
+                        title={app.requestedWeaponType}
+                        lines={lines}
+                        date={formatDate(app.createdAt)}
+                        statusBadge={getStatusBadge(app.statusName)}
+                        onClick={() => navigate(`/applications/${app.id}?type=promise`)}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground rounded-2xl bg-muted/20">
+                  <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-30" aria-hidden />
+                  {hasActiveQuery ? (
+                    <>
+                      <p className="mb-3">Brak wniosków dla wybranych kryteriów</p>
+                      <Button variant="outline" className="rounded-xl min-h-[44px]" onClick={clearSearchAndFilters} aria-label="Wyczyść filtry">
+                        Wyczyść filtry
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="mb-3">Brak wniosków o promesę</p>
+                  )}
+                </div>
+              )}
+            </div>
           ) : filteredPromise.length > 0 ? (
             <div className="space-y-3">
               {filteredPromise.map((app) => {

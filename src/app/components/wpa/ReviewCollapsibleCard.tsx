@@ -9,7 +9,10 @@ type Props = {
   title: string;
   description?: string;
   icon?: React.ReactNode;
+  titleAddon?: React.ReactNode;
   defaultOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   priority?: boolean;
   locked?: boolean;
   children?: React.ReactNode;
@@ -20,20 +23,25 @@ export function ReviewCollapsibleCard({
   title,
   description,
   icon,
+  titleAddon,
   defaultOpen = false,
+  open: controlledOpen,
+  onOpenChange,
   priority = false,
   locked = false,
   children,
   className,
 }: Props) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <Card
         className={cn(
-          "gap-0 rounded-2xl border-none shadow-sm overflow-hidden",
-          priority && "ring-1 ring-primary/15",
+          "gap-0 rounded-2xl border-0 shadow-sm overflow-hidden",
+          priority && "shadow-md",
           className,
         )}
       >
@@ -55,7 +63,10 @@ export function ReviewCollapsibleCard({
               <div className="flex items-center gap-3">
                 {icon}
                 <div className="min-w-0 flex-1">
-                  <h4 className={CITIZEN_TILE_TITLE_CLASS}>{title}</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className={CITIZEN_TILE_TITLE_CLASS}>{title}</h4>
+                    {titleAddon}
+                  </div>
                   {description && <p className={CITIZEN_TILE_SUBTITLE_CLASS}>{description}</p>}
                 </div>
                 <ChevronDown

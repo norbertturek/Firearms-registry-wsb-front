@@ -22,8 +22,13 @@ import { WPASearchPage } from "./pages/WPASearchPage";
 import { CitizenDetailsWPA } from "./pages/CitizenDetailsWPA";
 import { PermitDetails } from "./pages/PermitDetails";
 import { ApplicationCorrection } from "./pages/ApplicationCorrection";
+import { WpaAttachmentViewPage } from "./pages/WpaAttachmentViewPage";
 
 export const router = createBrowserRouter([
+  {
+    path: "/wpa/attachments/:applicationId/:attachmentId",
+    Component: WpaAttachmentViewPage,
+  },
   {
     path: "/",
     Component: Layout,

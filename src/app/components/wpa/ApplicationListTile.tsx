@@ -1,7 +1,14 @@
 import { ChevronRight } from "lucide-react";
 import { CitizenNavIconTile } from "../citizen/CitizenNavIconTile";
 import { DateStatusMeta } from "../DateStatusMeta";
+import { Card, CardContent } from "../ui/card";
 import { cn } from "../ui/utils";
+import {
+  CITIZEN_LIST_CARD_CLASS,
+  CITIZEN_LIST_CARD_CONTENT_CLASS,
+  CITIZEN_TILE_SUBTITLE_CLASS,
+  CITIZEN_TILE_TITLE_CLASS,
+} from "../../utils/citizenCardUi";
 
 type ApplicationListTileProps = {
   icon: React.ReactNode;
@@ -10,9 +17,6 @@ type ApplicationListTileProps = {
   /** Formatted submission date (no label prefix — shown next to status) */
   date?: string;
   statusBadge: React.ReactNode;
-  highlight?: boolean;
-  headerBadge?: React.ReactNode;
-  actions?: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
   onClick?: () => void;
@@ -24,50 +28,28 @@ export function ApplicationListTile({
   lines,
   date,
   statusBadge,
-  highlight = false,
-  headerBadge,
-  actions,
   footer,
   className,
   onClick,
 }: ApplicationListTileProps) {
   const clickable = !!onClick;
-  const interactiveProps = clickable
-    ? {
-        role: "button" as const,
-        tabIndex: 0,
-        onClick,
-        onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            onClick?.();
-          }
-        },
-      }
-    : {};
+
   return (
-    <div
-      {...interactiveProps}
+    <Card
       className={cn(
-        "rounded-2xl p-4 transition-colors",
-        highlight
-          ? "border border-blue-200/80 bg-blue-50/30 hover:bg-blue-50/50"
-          : "bg-muted/30 hover:bg-muted/50",
-        clickable &&
-          "cursor-pointer active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
+        CITIZEN_LIST_CARD_CLASS,
+        !clickable && "cursor-default active:scale-100",
         className,
       )}
+      onClick={clickable ? onClick : undefined}
     >
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+      <CardContent className={CITIZEN_LIST_CARD_CONTENT_CLASS}>
+        <div className="flex items-center gap-3">
           <CitizenNavIconTile>{icon}</CitizenNavIconTile>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-0.5">
-              <h3 className="font-semibold text-sm leading-snug text-foreground line-clamp-2 min-w-0 flex-1">{title}</h3>
-              {headerBadge}
-            </div>
+            <h3 className={CITIZEN_TILE_TITLE_CLASS}>{title}</h3>
             {lines.map((line, index) => (
-              <p key={`${index}-${line}`} className="text-xs text-muted-foreground mt-0.5 line-clamp-2 last:mb-0">
+              <p key={`${index}-${line}`} className={CITIZEN_TILE_SUBTITLE_CLASS}>
                 {line}
               </p>
             ))}
@@ -83,38 +65,15 @@ export function ApplicationListTile({
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground self-center" aria-hidden />
           )}
         </div>
-        {actions && (
+        {footer && (
           <div
-            className="flex gap-2 shrink-0"
-            onClick={(event) => event.stopPropagation()}
+            className="mt-3 flex flex-col sm:flex-row flex-wrap gap-2"
+            onClick={clickable ? (event) => event.stopPropagation() : undefined}
           >
-            {actions}
+            {footer}
           </div>
         )}
-      </div>
-      {footer && (
-        <div
-          className="mt-3 md:mt-4 space-y-2"
-          onClick={clickable ? (event) => event.stopPropagation() : undefined}
-        >
-          {footer}
-        </div>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   );
-}
-
-export function isNewForVerification(type: "permit" | "promise", statusName: string) {
-  if (type === "permit") return statusName === "Submitted";
-  return statusName === "Submitted" || statusName === "Paid";
-}
-
-export function isPendingApplication(type: "permit" | "promise", statusName: string) {
-  if (type === "permit") return statusName === "Submitted" || statusName === "UnderReview";
-  return statusName === "Submitted" || statusName === "Paid" || statusName === "UnderReview";
-}
-
-export function getDecisionActionLabel(_type: "permit" | "promise", statusName: string) {
-  if (statusName === "Approved" || statusName === "Rejected") return "Podgląd";
-  return "Rozpatrz";
 }

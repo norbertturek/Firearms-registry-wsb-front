@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Download, ExternalLink, Loader2, FileWarning } from "lucide-react";
@@ -9,6 +9,8 @@ interface AttachmentPreviewDialogProps {
   fileName: string;
   contentType: string;
   fetchBlob: () => Promise<Blob>;
+  /** Same-origin route opened in a new tab (avoids blob: URLs in the address bar). */
+  viewUrl?: string;
 }
 
 export function AttachmentPreviewDialog({
@@ -17,33 +19,49 @@ export function AttachmentPreviewDialog({
   fileName,
   contentType,
   fetchBlob,
+  viewUrl,
 }: AttachmentPreviewDialogProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fetchBlobRef = useRef(fetchBlob);
+  const openingRef = useRef(false);
+  fetchBlobRef.current = fetchBlob;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setBlobUrl(null);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     let revokedUrl: string | null = null;
-    fetchBlob()
+    let cancelled = false;
+
+    fetchBlobRef
+      .current()
       .then((blob) => {
+        if (cancelled) return;
         const typed = blob.type === contentType ? blob : new Blob([blob], { type: contentType });
         const url = URL.createObjectURL(typed);
         revokedUrl = url;
         setBlobUrl(url);
       })
       .catch((err: any) => {
+        if (cancelled) return;
         setError(err?.message ?? "Nie udało się pobrać pliku");
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     return () => {
+      cancelled = true;
       if (revokedUrl) URL.revokeObjectURL(revokedUrl);
       setBlobUrl(null);
     };
-  }, [open, contentType, fetchBlob]);
+  }, [open, contentType]);
 
   const isImage = contentType.startsWith("image/");
   const isPdf = contentType === "application/pdf";
@@ -59,13 +77,19 @@ export function AttachmentPreviewDialog({
   };
 
   const handleOpenNewTab = () => {
-    if (!blobUrl) return;
-    window.open(blobUrl, "_blank");
+    if (openingRef.current) return;
+    if (!viewUrl) return;
+
+    openingRef.current = true;
+    window.open(viewUrl, "_blank", "noopener,noreferrer");
+    window.setTimeout(() => {
+      openingRef.current = false;
+    }, 500);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-2xl max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="rounded-2xl w-[calc(100vw-2rem)] max-w-lg sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="truncate">{fileName}</DialogTitle>
           <DialogDescription>
@@ -74,7 +98,7 @@ export function AttachmentPreviewDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-auto bg-muted/30 rounded-xl flex items-center justify-center min-h-[50vh]">
+        <div className="flex-1 overflow-auto bg-muted/30 rounded-xl flex items-center justify-center min-h-[40vh] sm:min-h-[50vh]">
           {loading && (
             <div className="flex flex-col items-center gap-2 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin" />
@@ -97,7 +121,7 @@ export function AttachmentPreviewDialog({
             <iframe
               src={blobUrl}
               title={fileName}
-              className="w-full h-[70vh] rounded-lg bg-white"
+              className="w-full h-[50vh] sm:h-[70vh] rounded-lg bg-white"
             />
           )}
 
@@ -109,12 +133,18 @@ export function AttachmentPreviewDialog({
           )}
         </div>
 
-        <div className="flex gap-2 justify-end pt-2">
-          <Button variant="outline" onClick={handleOpenNewTab} disabled={!blobUrl} className="rounded-xl">
+        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleOpenNewTab}
+            disabled={!viewUrl}
+            className="rounded-xl"
+          >
             <ExternalLink className="h-4 w-4 mr-2" />
             Otwórz w nowej karcie
           </Button>
-          <Button onClick={handleDownload} disabled={!blobUrl} className="rounded-xl">
+          <Button type="button" onClick={handleDownload} disabled={!blobUrl} className="rounded-xl">
             <Download className="h-4 w-4 mr-2" />
             Pobierz
           </Button>

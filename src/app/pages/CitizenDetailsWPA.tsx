@@ -141,9 +141,9 @@ export function CitizenDetailsWPA() {
           <Card className="rounded-2xl border-none shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3">
-                <div className="bg-primary/10 p-3 rounded-xl">
-                  <User className="h-6 w-6 text-primary" />
-                </div>
+                <CitizenNavIconTile>
+                  <User />
+                </CitizenNavIconTile>
                 <div>
                   <CardTitle className="text-lg">{citizen.firstName} {citizen.lastName}</CardTitle>
                   <CardDescription>PESEL: {citizen.pesel}</CardDescription>

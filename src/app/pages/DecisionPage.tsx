@@ -4,8 +4,8 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
-import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Badge } from "../components/ui/badge";
+import { cn } from "../components/ui/utils";
 import {
   AlertCircle,
   CheckCircle,
@@ -166,15 +166,26 @@ export function DecisionPage() {
 
     setSubmitting(true);
     try {
+      const examDates =
+        type === "permit" && medicalExpiry && psychologicalExpiry
+          ? {
+              medicalExamExpiryDate: `${medicalExpiry}T00:00:00Z`,
+              psychologicalExamExpiryDate: `${psychologicalExpiry}T00:00:00Z`,
+            }
+          : undefined;
+
       if (type === "permit") {
-        if (decision === "mark-under-review") await wpaService.markPermitApplicationUnderReview(id);
+        if (decision === "mark-under-review") await wpaService.markPermitApplicationUnderReview(id, examDates);
         else if (decision === "approve") await wpaService.approvePermitApplication(id, {
           maxFirearms: parseInt(maxFirearms, 10),
-          medicalExamExpiryDate: `${medicalExpiry}T00:00:00Z`,
-          psychologicalExamExpiryDate: `${psychologicalExpiry}T00:00:00Z`,
+          medicalExamExpiryDate: examDates!.medicalExamExpiryDate,
+          psychologicalExamExpiryDate: examDates!.psychologicalExamExpiryDate,
         });
-        else if (decision === "reject") await wpaService.rejectPermitApplication(id, { reason: justification });
-        else if (decision === "require-correction") await wpaService.requirePermitApplicationCorrection(id, { reason: justification });
+        else if (decision === "reject") {
+          await wpaService.rejectPermitApplication(id, { reason: justification, ...examDates });
+        } else if (decision === "require-correction") {
+          await wpaService.requirePermitApplicationCorrection(id, { reason: justification, ...examDates });
+        }
       } else {
         if (decision === "mark-under-review") await wpaService.markPromiseApplicationUnderReview(id);
         else if (decision === "approve") await wpaService.approvePromiseApplication(id);
@@ -234,7 +245,7 @@ export function DecisionPage() {
 
       <div className="grid gap-2.5 md:gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <form onSubmit={handleSubmit} className={`flex flex-col gap-2.5 md:gap-4 ${isReadOnly ? "pb-0" : "pb-32 md:pb-0"}`}>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 md:gap-4">
             {!isReadOnly && (
               <ReviewCollapsibleCard
                 title="Wytyczne"
@@ -276,55 +287,83 @@ export function DecisionPage() {
               ) : (
               <div className="space-y-4 md:space-y-6">
                 <div>
-                  <RadioGroup
-                    value={decision || ""}
-                    onValueChange={(value) => setDecision(value as Decision)}
-                    className="grid gap-2 md:gap-3"
-                  >
-                    <Label htmlFor="mark-under-review" className={`flex items-start space-x-2.5 md:space-x-3 border rounded-lg md:rounded-xl p-3 md:p-4 transition-colors ${canMarkUnderReview ? "cursor-pointer" : "cursor-not-allowed opacity-60"} ${decision === "mark-under-review" ? "bg-blue-50/50 border-blue-200" : "border-border hover:bg-muted/50"}`}>
-                      <RadioGroupItem value="mark-under-review" id="mark-under-review" className="mt-0.5 md:mt-1" disabled={!canMarkUnderReview} />
-                      <div className="flex-1 flex items-start gap-2 md:gap-3 min-w-0">
-                        <Clock className="h-4 w-4 md:h-5 md:w-5 text-blue-600 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Oznacz jako weryfikowany</p>
-                          <p className="text-xs md:text-sm text-muted-foreground leading-snug">Zmiana statusu na &quot;W weryfikacji&quot;</p>
-                        </div>
+                  <div role="radiogroup" aria-label="Wybór decyzji" className="grid gap-2 md:gap-3">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={decision === "mark-under-review"}
+                      disabled={!canMarkUnderReview}
+                      onClick={() => setDecision("mark-under-review")}
+                      className={cn(
+                        "w-full flex items-start gap-2.5 md:gap-3 border rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-colors",
+                        canMarkUnderReview ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                        decision === "mark-under-review" ? "bg-blue-50/50 border-blue-200" : "border-border",
+                      )}
+                    >
+                      <Clock className="h-4 w-4 md:h-5 md:w-5 text-blue-600 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Oznacz jako weryfikowany</p>
+                        <p className="text-xs md:text-sm text-muted-foreground leading-snug">Zmiana statusu na &quot;W weryfikacji&quot;</p>
                       </div>
-                    </Label>
+                    </button>
 
-                    <Label htmlFor="approve" className={`flex items-start space-x-2.5 md:space-x-3 border rounded-lg md:rounded-xl p-3 md:p-4 transition-colors ${canApprove ? "cursor-pointer" : "cursor-not-allowed opacity-60"} ${decision === "approve" ? "bg-emerald-50/50 border-emerald-200" : "border-border hover:bg-muted/50"}`}>
-                      <RadioGroupItem value="approve" id="approve" className="mt-0.5 md:mt-1" disabled={!canApprove} />
-                      <div className="flex-1 flex items-start gap-2 md:gap-3 min-w-0">
-                        <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-emerald-600 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Zatwierdź wniosek</p>
-                          <p className="text-xs md:text-sm text-muted-foreground leading-snug">{type === "permit" ? "Wygeneruj pozwolenie na broń" : "Wygeneruj aktywną promesę"}</p>
-                        </div>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={decision === "approve"}
+                      disabled={!canApprove}
+                      onClick={() => setDecision("approve")}
+                      className={cn(
+                        "w-full flex items-start gap-2.5 md:gap-3 border rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-colors",
+                        canApprove ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                        decision === "approve" ? "bg-emerald-50/50 border-emerald-200" : "border-border",
+                      )}
+                    >
+                      <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-emerald-600 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Zatwierdź wniosek</p>
+                        <p className="text-xs md:text-sm text-muted-foreground leading-snug">{type === "permit" ? "Wygeneruj pozwolenie na broń" : "Wygeneruj aktywną promesę"}</p>
                       </div>
-                    </Label>
+                    </button>
 
-                    <Label htmlFor="require-correction" className={`flex items-start space-x-2.5 md:space-x-3 border rounded-lg md:rounded-xl p-3 md:p-4 transition-colors ${canRequireCorrection ? "cursor-pointer" : "cursor-not-allowed opacity-60"} ${decision === "require-correction" ? "bg-orange-50/50 border-orange-200" : "border-border hover:bg-muted/50"}`}>
-                      <RadioGroupItem value="require-correction" id="require-correction" className="mt-0.5 md:mt-1" disabled={!canRequireCorrection} />
-                      <div className="flex-1 flex items-start gap-2 md:gap-3 min-w-0">
-                        <FileWarning className="h-4 w-4 md:h-5 md:w-5 text-orange-500 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Wezwij do uzupełnienia</p>
-                          <p className="text-xs md:text-sm text-muted-foreground leading-snug">Wniosek posiada braki formalne lub dokumentacyjne</p>
-                        </div>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={decision === "require-correction"}
+                      disabled={!canRequireCorrection}
+                      onClick={() => setDecision("require-correction")}
+                      className={cn(
+                        "w-full flex items-start gap-2.5 md:gap-3 border rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-colors",
+                        canRequireCorrection ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                        decision === "require-correction" ? "bg-orange-50/50 border-orange-200" : "border-border",
+                      )}
+                    >
+                      <FileWarning className="h-4 w-4 md:h-5 md:w-5 text-orange-500 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Wezwij do uzupełnienia</p>
+                        <p className="text-xs md:text-sm text-muted-foreground leading-snug">Wniosek posiada braki formalne lub dokumentacyjne</p>
                       </div>
-                    </Label>
+                    </button>
 
-                    <Label htmlFor="reject" className={`flex items-start space-x-2.5 md:space-x-3 border rounded-lg md:rounded-xl p-3 md:p-4 transition-colors ${canReject ? "cursor-pointer" : "cursor-not-allowed opacity-60"} ${decision === "reject" ? "bg-red-50/50 border-red-200" : "border-border hover:bg-muted/50"}`}>
-                      <RadioGroupItem value="reject" id="reject" className="mt-0.5 md:mt-1" disabled={!canReject} />
-                      <div className="flex-1 flex items-start gap-2 md:gap-3 min-w-0">
-                        <XCircle className="h-4 w-4 md:h-5 md:w-5 text-red-600 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Odrzuć wniosek</p>
-                          <p className="text-xs md:text-sm text-muted-foreground leading-snug">Wydaj negatywną decyzję z uzasadnieniem</p>
-                        </div>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={decision === "reject"}
+                      disabled={!canReject}
+                      onClick={() => setDecision("reject")}
+                      className={cn(
+                        "w-full flex items-start gap-2.5 md:gap-3 border rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-colors",
+                        canReject ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                        decision === "reject" ? "bg-red-50/50 border-red-200" : "border-border",
+                      )}
+                    >
+                      <XCircle className="h-4 w-4 md:h-5 md:w-5 text-red-600 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Odrzuć wniosek</p>
+                        <p className="text-xs md:text-sm text-muted-foreground leading-snug">Wydaj negatywną decyzję z uzasadnieniem</p>
                       </div>
-                    </Label>
-                  </RadioGroup>
+                    </button>
+                  </div>
                   {type === "promise" && !canApprove && (
                     <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
                       Najpierw oznacz wniosek jako weryfikowany. Zatwierdzenie promesy bedzie dostepne po zmianie statusu na &quot;UnderReview&quot;.
@@ -417,10 +456,10 @@ export function DecisionPage() {
               </ReviewCollapsibleCard>
             )}
 
-            {permitApp && canApprove && (
+            {permitApp && !isReadOnly && (
               <ReviewCollapsibleCard
                 title="Ważność badań po weryfikacji"
-                description="Daty ważności wynikające z dostarczonych zaświadczeń — zapisane na pozwoleniu przy zatwierdzeniu"
+                description="Daty z zaświadczeń — widoczne w szczegółach wniosku i zapisywane na pozwoleniu przy zatwierdzeniu"
                 icon={applicationSectionIcon(<Clock className="h-5 w-5" />)}
                 defaultOpen
                 className="order-3 lg:order-5"
@@ -533,11 +572,11 @@ export function DecisionPage() {
             )}
 
             {!isReadOnly && (
-            <div className="order-7 fixed bottom-[5.25rem] left-0 right-0 z-40 px-4 py-2 md:static md:px-0 md:py-0">
+            <div className="order-7">
               <Button
                 type="submit"
                 disabled={submitting}
-                className="min-h-[52px] w-full max-w-3xl mx-auto rounded-xl text-sm md:text-base font-semibold shadow-md shadow-black/10 md:shadow-none"
+                className="min-h-[52px] w-full rounded-xl text-sm md:text-base font-semibold"
               >
                 {submitting ? "Zapisywanie..." : "Zatwierdź i wyślij"}
               </Button>

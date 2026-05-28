@@ -10,6 +10,52 @@ function qp(url: URL, key: string, fallback: number) {
   return v !== null ? Number(v) : fallback;
 }
 
+function buildWpaCitizenDetail(id: string) {
+  const citizen = db.wpaCitizens.find((c) => c.id === id);
+  if (!citizen) return null;
+
+  const permitsFromRegistry = db.permits.filter((p) => p.citizenId === id);
+  const summaryPermits = citizen.permits ?? [];
+
+  const permits =
+    permitsFromRegistry.length > 0
+      ? permitsFromRegistry
+      : summaryPermits.map(
+          (summary: { permitNumber: string; permitTypeName: string }, index: number) => ({
+            id: `permit-stub-${id}-${index}`,
+            permitNumber: summary.permitNumber,
+            permitType: summary.permitTypeName,
+            permitTypeName: summary.permitTypeName,
+            status: 'Active',
+            statusName: 'Active',
+            issueDate: citizen.createdAt,
+            expiryDate: new Date(Date.now() + 365 * 86_400_000).toISOString(),
+            maxFirearms: 5,
+            usedSlots: citizen.totalFirearms ?? 0,
+            availableSlots: Math.max(0, 5 - (citizen.totalFirearms ?? 0)),
+            isValid: true,
+            medicalExamExpiryDate: new Date(Date.now() + 60 * 86_400_000).toISOString(),
+            psychologicalExamExpiryDate: new Date(Date.now() + 200 * 86_400_000).toISOString(),
+            citizenId: id,
+          }),
+        );
+
+  const activeAlerts = Math.max(
+    citizen.activeAlerts ?? 0,
+    db.medicalAlerts.filter((a) => a.citizenId === id && !a.isResolved).length,
+  );
+
+  const totalFirearms =
+    id === db.IDS.citizenProfile ? db.firearms.length : (citizen.totalFirearms ?? 0);
+
+  return {
+    ...citizen,
+    permits,
+    totalFirearms,
+    activeAlerts,
+  };
+}
+
 export const wpaHandlers = [
   // ── Permit applications ────────────────────────────────────────────────────
   http.get(`${BASE}/wpa/permit-applications`, ({ request }) => {
@@ -26,9 +72,17 @@ export const wpaHandlers = [
     return HttpResponse.json(app);
   }),
 
-  http.post(`${BASE}/wpa/permit-applications/:id/mark-under-review`, ({ params }) => {
+  http.post(`${BASE}/wpa/permit-applications/:id/mark-under-review`, async ({ params, request }) => {
     const app = db.permitApplications.find((a) => a.id === params.id);
-    if (app) { app.status = 'UnderReview'; app.statusName = 'UnderReview'; }
+    if (!app) return HttpResponse.json({ message: 'Not found' }, { status: 404 });
+    const body = (await request.json().catch(() => ({}))) as {
+      medicalExamExpiryDate?: string;
+      psychologicalExamExpiryDate?: string;
+    };
+    if (body.medicalExamExpiryDate) app.medicalExamExpiryDate = body.medicalExamExpiryDate;
+    if (body.psychologicalExamExpiryDate) app.psychologicalExamExpiryDate = body.psychologicalExamExpiryDate;
+    app.status = 'UnderReview';
+    app.statusName = 'UnderReview';
     return new HttpResponse(null, { status: 204 });
   }),
 
@@ -70,6 +124,8 @@ export const wpaHandlers = [
     Object.assign(app, {
       status: 'Rejected', statusName: 'Rejected',
       rejectionReason: body.reason ?? null,
+      medicalExamExpiryDate: body.medicalExamExpiryDate ?? app.medicalExamExpiryDate,
+      psychologicalExamExpiryDate: body.psychologicalExamExpiryDate ?? app.psychologicalExamExpiryDate,
       reviewedAt: new Date().toISOString(),
       reviewedByOfficerName: OFFICER_NAME,
     });
@@ -83,6 +139,8 @@ export const wpaHandlers = [
     Object.assign(app, {
       status: 'RequiresCorrection', statusName: 'RequiresCorrection',
       correctionNotes: body.reason ?? null,
+      medicalExamExpiryDate: body.medicalExamExpiryDate ?? app.medicalExamExpiryDate,
+      psychologicalExamExpiryDate: body.psychologicalExamExpiryDate ?? app.psychologicalExamExpiryDate,
       reviewedAt: new Date().toISOString(),
       reviewedByOfficerName: OFFICER_NAME,
     });
@@ -214,14 +272,11 @@ export const wpaHandlers = [
   }),
 
   http.get(`${BASE}/wpa/citizens/:id`, ({ params }) => {
-    if (params.id !== db.IDS.citizenProfile) {
+    const detail = buildWpaCitizenDetail(String(params.id));
+    if (!detail) {
       return HttpResponse.json({ message: 'Not found' }, { status: 404 });
     }
-    return HttpResponse.json({
-      ...db.wpaCitizen,
-      totalFirearms: db.firearms.length,
-      activeAlerts: db.medicalAlerts.filter((a) => !a.isResolved).length,
-    });
+    return HttpResponse.json(detail);
   }),
 
   // ── Firearms search ────────────────────────────────────────────────────────

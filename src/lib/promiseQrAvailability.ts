@@ -19,17 +19,19 @@ function hasUsablePromiseStatus(statusName: string) {
   return statusName === "Active" || statusName === "Approved";
 }
 
+/** Match only when weapon type matches; quantity breaks ties. QR token is not a match signal. */
 function scoreMatch(application: PromiseApplicationLike, promise: PromiseDto) {
-  let score = 0;
-  if (normalize(promise.weaponType) === normalize(application.requestedWeaponType)) score += 3;
+  if (normalize(promise.weaponType) !== normalize(application.requestedWeaponType)) {
+    return 0;
+  }
+  let score = 3;
   if (promise.quantity === application.requestedQuantity) score += 2;
-  if (promise.qrToken) score += 4;
   return score;
 }
 
 export function findIssuedPromiseForApplication(
   application: PromiseApplicationLike,
-  issuedPromises: PromiseDto[]
+  issuedPromises: PromiseDto[],
 ): PromiseDto | null {
   const candidates = issuedPromises
     .filter((promise) => hasUsablePromiseStatus(promise.statusName))
@@ -49,14 +51,33 @@ export function findIssuedPromiseForApplication(
 
 export function getPromiseQrMatchResult(
   application: PromiseApplicationLike,
-  issuedPromises: PromiseDto[]
+  issuedPromises: PromiseDto[],
 ): PromiseQrMatchResult {
+  if (application.statusName !== "Approved") {
+    return {
+      issuedPromise: null,
+      canOpenQrModal: false,
+      showPendingFallback: false,
+    };
+  }
+
   const issuedPromise = findIssuedPromiseForApplication(application, issuedPromises);
   const canOpenQrModal = Boolean(issuedPromise?.qrToken);
-  const showPendingFallback = application.statusName === "Approved" && !canOpenQrModal;
+  const showPendingFallback = !canOpenQrModal;
+
   return {
     issuedPromise,
     canOpenQrModal,
     showPendingFallback,
   };
+}
+
+export function getPromiseQrUnavailableMessage(statusName: string) {
+  if (statusName === "Rejected") {
+    return "Wniosek został odrzucony — promesa z kodem QR nie zostanie wydana.";
+  }
+  if (statusName === "Approved") {
+    return "Kod QR promesy będzie dostępny po wydaniu aktywnej promesy.";
+  }
+  return "Kod QR promesy będzie dostępny po zatwierdzeniu wniosku przez WPA i wydaniu promesy.";
 }

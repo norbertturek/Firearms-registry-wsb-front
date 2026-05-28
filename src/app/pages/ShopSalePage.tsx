@@ -10,6 +10,7 @@ import { cn } from "../components/ui/utils";
 import { AlertCircle, ShieldCheck, CheckCircle, XCircle, QrCode, RotateCcw, Camera, Hash } from "lucide-react";
 import { toast } from "sonner";
 import { ReviewCollapsibleCard } from "../components/wpa/ReviewCollapsibleCard";
+import { applicationSectionIcon } from "../components/wpa/ApplicationDetailField";
 import { shopService, translateVerifyMessage } from "../../services/shopService";
 import type { FirearmCategory, VerifyPermitResponse } from "../../types/api";
 import { QrScanner } from "../components/shop/QrScanner";
@@ -214,11 +215,7 @@ export function ShopSalePage() {
           }
           defaultOpen
           priority={!promesaVerified}
-          icon={
-            <div className="bg-primary/10 p-2 rounded-xl text-primary">
-              <QrCode className="h-4 w-4" />
-            </div>
-          }
+          icon={applicationSectionIcon(<QrCode className="h-5 w-5" />)}
         >
           <div className="space-y-3">
             {!promesaVerified && (
@@ -360,11 +357,7 @@ export function ShopSalePage() {
           defaultOpen={promesaVerified}
           priority={promesaVerified}
           locked={firearmSectionLocked}
-          icon={
-            <div className="bg-orange-100 p-2 rounded-xl text-orange-600">
-              <ShieldCheck className="h-4 w-4" />
-            </div>
-          }
+          icon={applicationSectionIcon(<ShieldCheck className="h-5 w-5" />)}
           className={firearmSectionLocked ? "opacity-75" : ""}
         >
           {firearmSectionLocked && (

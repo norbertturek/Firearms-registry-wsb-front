@@ -1,15 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { CalendarDays, ClipboardList, Crosshair, Shield, Stethoscope, UserCheck } from "lucide-react";
+import { AlertTriangle, CalendarDays, ClipboardList, Crosshair, Shield } from "lucide-react";
+import { CitizenMedicalNavIcon } from "../components/citizen/CitizenMedicalNavIcon";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
+import { cn } from "../components/ui/utils";
 import { Separator } from "../components/ui/separator";
 import { ReviewCollapsibleCard } from "../components/wpa/ReviewCollapsibleCard";
 import { applicationSectionIcon } from "../components/wpa/ApplicationDetailField";
+import { ExamStatusBadge, PermitExamStatusRow } from "../components/citizen/PermitExamStatusRow";
 import { citizenService } from "../../services/citizenService";
-import type { PermitDto } from "../../types/api";
+import type { CitizenMedicalAlertDto, PermitDto } from "../../types/api";
 import { getPermitStatusMeta } from "../../lib/statusUi";
+import { getExamEntriesForPermit, needsExamAttention, worstExamStatus } from "../../lib/permitExams";
+import { CITIZEN_LIST_CARD_CONTENT_CLASS } from "../utils/citizenCardUi";
 
 const PERMIT_TYPE_LABELS: Record<string, string> = {
   Sport: "Sportowe",
@@ -44,15 +49,43 @@ export function PermitDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [permit, setPermit] = useState<PermitDto | null>(null);
+  const [alerts, setAlerts] = useState<CitizenMedicalAlertDto[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    citizenService
-      .getPermits()
-      .then((permits) => setPermit(permits.find((p) => p.id === id) ?? null))
-      .catch(() => setPermit(null))
+    Promise.all([citizenService.getPermits(), citizenService.getMedicalAlerts()])
+      .then(([permits, alertsRes]) => {
+        setPermit(permits.find((p) => p.id === id) ?? null);
+        setAlerts(alertsRes);
+      })
+      .catch(() => {
+        setPermit(null);
+        setAlerts([]);
+      })
       .finally(() => setLoading(false));
   }, [id]);
+
+  const examEntries = useMemo(
+    () => (permit ? getExamEntriesForPermit(permit, alerts) : []),
+    [permit, alerts],
+  );
+  const examAttentionStatus = worstExamStatus(examEntries);
+  const examsNeedAttention = needsExamAttention(examAttentionStatus);
+  const examsSectionRef = useRef<HTMLDivElement>(null);
+  const [examsSectionOpen, setExamsSectionOpen] = useState(false);
+
+  useEffect(() => {
+    if (examsNeedAttention) {
+      setExamsSectionOpen(true);
+    }
+  }, [examsNeedAttention, permit?.id]);
+
+  const scrollToExamsSection = () => {
+    setExamsSectionOpen(true);
+    requestAnimationFrame(() => {
+      examsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   if (loading) {
     return (
@@ -88,6 +121,40 @@ export function PermitDetails() {
         <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Szczegóły pozwolenia</h1>
         <p className="text-muted-foreground mt-1">Dokument i limity przypisane do konta</p>
       </div>
+
+      {examsNeedAttention && (
+        <Card
+          className="rounded-2xl border-none shadow-sm bg-amber-50/80 gap-0 cursor-pointer active:scale-[0.99] transition-transform"
+          onClick={scrollToExamsSection}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              scrollToExamsSection();
+            }
+          }}
+        >
+          <CardContent className={cn(CITIZEN_LIST_CARD_CONTENT_CLASS, "flex items-center gap-3")}>
+            <div className="bg-amber-100 p-2 rounded-full text-amber-700 shrink-0">
+              <AlertTriangle className="h-5 w-5" aria-hidden />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-950 leading-snug">Badania wymagają uwagi</p>
+              <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                {examAttentionStatus === "expired"
+                  ? "Co najmniej jedno badanie wygasło — odnowienie jest konieczne przed dalszymi operacjami."
+                  : examAttentionStatus === "missing"
+                    ? "Brakuje dat ważności badań — skontaktuj się z WPA."
+                    : "Zbliża się termin ważności badań — sprawdź szczegóły."}
+              </p>
+            </div>
+            <div className="shrink-0 self-center">
+              <ExamStatusBadge status={examAttentionStatus} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className={`relative overflow-hidden rounded-3xl p-6 shadow-md ${permitTheme}`}>
         <div className="absolute inset-0 opacity-[0.08]">
@@ -164,26 +231,30 @@ export function PermitDetails() {
         </div>
       </ReviewCollapsibleCard>
 
-      <ReviewCollapsibleCard
-        title="Badania"
-        description="Ważność badań medycznych i psychologicznych"
-        icon={applicationSectionIcon(<Stethoscope />)}
-      >
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-muted-foreground">Lekarskie ważne do</span>
-            <span className="text-sm font-medium text-right">{formatDate(permit.medicalExamExpiryDate)}</span>
+      <div ref={examsSectionRef} id="permit-medical-exams" className="scroll-mt-4">
+        <ReviewCollapsibleCard
+          title="Badania"
+          description="Ważność badań medycznych i psychologicznych"
+          icon={<CitizenMedicalNavIcon status={examAttentionStatus} variant="inline" />}
+          titleAddon={examsNeedAttention ? <ExamStatusBadge status={examAttentionStatus} /> : undefined}
+          open={examsSectionOpen}
+          onOpenChange={setExamsSectionOpen}
+        >
+          <div className="divide-y divide-border/80 -mx-1">
+            {examEntries.map((entry) => (
+              <PermitExamStatusRow key={entry.id} entry={entry} />
+            ))}
           </div>
-          <Separator />
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-muted-foreground">Psychologiczne ważne do</span>
-            <span className="text-sm font-medium text-right">{formatDate(permit.psychologicalExamExpiryDate)}</span>
-          </div>
-        </div>
-      </ReviewCollapsibleCard>
+          {examsNeedAttention && (
+            <p className="text-xs text-muted-foreground leading-relaxed mt-4 pt-3 border-t border-border/80">
+              Po odnowieniu badań dostarcz zaświadczenia do WPA. Urzędnik zaktualizuje daty na tym pozwoleniu —
+              nie składasz ponownie wniosku o nowe pozwolenie, o ile sam dokument pozwolenia nadal obowiązuje.
+            </p>
+          )}
+        </ReviewCollapsibleCard>
+      </div>
 
       <Button className="w-full min-h-[52px] rounded-xl" onClick={() => navigate("/applications/new/promise")}>
-        <UserCheck className="h-4 w-4 mr-2" />
         Złóż wniosek o promesę
       </Button>
     </div>

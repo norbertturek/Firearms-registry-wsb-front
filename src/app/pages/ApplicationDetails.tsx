@@ -13,7 +13,7 @@ import { ReviewCollapsibleCard } from "../components/wpa/ReviewCollapsibleCard";
 import { ApplicationDetailField, applicationSectionIcon } from "../components/wpa/ApplicationDetailField";
 import { PromiseQrModal } from "../components/citizen/PromiseQrModal";
 import { formatApplicationId } from "../../lib/registryNumbers";
-import { getPromiseQrMatchResult } from "../../lib/promiseQrAvailability";
+import { getPromiseQrMatchResult, getPromiseQrUnavailableMessage } from "../../lib/promiseQrAvailability";
 import { getApplicationStatusMeta } from "../../lib/statusUi";
 import type {
   WpaPermitApplicationDto,
@@ -24,14 +24,7 @@ import type {
   PermitDto,
   PromiseDto,
 } from "../../types/api";
-
-const PERMIT_TYPE_LABELS: Record<string, string> = {
-  Sport: "Sportowe",
-  Hunting: "Łowieckie",
-  Collection: "Kolekcjonerskie",
-  Protection: "Ochrony osobistej",
-  Other: "Inne",
-};
+import { getPermitApplicationTypeLabel } from "../utils/permitLabels";
 
 function getStatusBadge(status: string) {
   const meta = getApplicationStatusMeta(status);
@@ -163,7 +156,7 @@ export function ApplicationDetails() {
   }
 
   const title = permitApp
-    ? `Wniosek o pozwolenie — ${PERMIT_TYPE_LABELS[permitApp.requestedPermitTypeName] ?? permitApp.requestedPermitTypeName}`
+    ? `Wniosek o pozwolenie — ${getPermitApplicationTypeLabel(permitApp)}`
     : promiseApp
       ? `Wniosek o promesę — ${promiseApp.requestedWeaponType}`
       : "Wniosek";
@@ -196,7 +189,7 @@ export function ApplicationDetails() {
             <ReviewCollapsibleCard
               title="Powód odrzucenia"
               description="Decyzja negatywna WPA"
-              icon={applicationSectionIcon(<AlertCircle />, "bg-red-100 text-red-600")}
+              icon={applicationSectionIcon(<AlertCircle />)}
               defaultOpen
               priority
               className="bg-red-50/50"
@@ -209,7 +202,7 @@ export function ApplicationDetails() {
             <ReviewCollapsibleCard
               title="Wezwanie do uzupełnienia"
               description="Uwagi urzędnika do poprawy wniosku"
-              icon={applicationSectionIcon(<AlertCircle />, "bg-orange-100 text-orange-600")}
+              icon={applicationSectionIcon(<AlertCircle />)}
               defaultOpen
               priority
               className="bg-orange-50/50"
@@ -243,7 +236,7 @@ export function ApplicationDetails() {
             >
               <div className="space-y-3 md:space-y-4">
                 <ApplicationDetailField label="Rodzaj pozwolenia">
-                  {PERMIT_TYPE_LABELS[permitApp.requestedPermitTypeName] ?? permitApp.requestedPermitTypeName}
+                  {getPermitApplicationTypeLabel(permitApp)}
                 </ApplicationDetailField>
                 <Separator className="bg-border" />
                 <ApplicationDetailField label="Uzasadnienie" valueClassName="font-normal">
@@ -344,7 +337,7 @@ export function ApplicationDetails() {
                         }
                         return (
                           <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
-                            Kod QR promesy będzie dostępny po wydaniu aktywnej promesy.
+                            {getPromiseQrUnavailableMessage(promiseApp.statusName)}
                           </p>
                         );
                       })()}

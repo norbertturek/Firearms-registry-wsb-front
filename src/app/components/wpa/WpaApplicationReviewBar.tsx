@@ -9,31 +9,11 @@ import { cn } from "../ui/utils";
 import { contentColumnClass } from "../../utils/layout";
 import type { PermitDto, WpaPermitApplicationDto, WpaPromiseApplicationDto } from "../../../types/api";
 import { formatApplicationId } from "../../../lib/registryNumbers";
+import { getPermitApplicationTypeLabel } from "../../utils/permitLabels";
 
 export const WPA_REVIEW_BAR_PORTAL_ID = "wpa-review-bar-portal";
 
-const PERMIT_TYPE_LABELS: Record<string, string> = {
-  Sport: "Sportowe",
-  Hunting: "Łowieckie",
-  Collection: "Kolekcjonerskie",
-  Protection: "Ochrony osobistej",
-  Other: "Inne",
-};
-
-function isNewForVerification(type: "permit" | "promise", statusName: string) {
-  if (type === "permit") return statusName === "Submitted";
-  return statusName === "Submitted" || statusName === "Paid";
-}
-
-function getStatusBadge(type: "permit" | "promise", status: string) {
-  if (isNewForVerification(type, status)) {
-    return (
-      <Badge className="bg-blue-600 hover:bg-blue-600 text-white border-none px-2 py-0.5 rounded-full shrink-0 text-[10px] md:text-[11px]">
-        Nowy
-      </Badge>
-    );
-  }
-
+function getStatusBadge(status: string) {
   switch (status) {
     case "Submitted":
       return <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none px-2 py-0.5 rounded-full shrink-0 text-[10px] md:text-xs">Złożony</Badge>;
@@ -57,7 +37,7 @@ function getAppTitle(
   promiseApp?: WpaPromiseApplicationDto | null,
 ) {
   if (permitApp) {
-    return `Wniosek o pozwolenie — ${PERMIT_TYPE_LABELS[permitApp.requestedPermitTypeName] ?? permitApp.requestedPermitTypeName}`;
+    return `Wniosek o pozwolenie — ${getPermitApplicationTypeLabel(permitApp)}`;
   }
   if (promiseApp) {
     return `Wniosek o promesę — ${promiseApp.requestedWeaponType}`;
@@ -84,13 +64,11 @@ function ApplicationHeaderInfo({
   app,
   permitApp,
   promiseApp,
-  type,
   compact = false,
 }: {
   app: WpaPermitApplicationDto | WpaPromiseApplicationDto;
   permitApp?: WpaPermitApplicationDto | null;
   promiseApp?: WpaPromiseApplicationDto | null;
-  type: "permit" | "promise";
   compact?: boolean;
 }) {
   const labelClass = compact
@@ -109,7 +87,7 @@ function ApplicationHeaderInfo({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className={labelClass}>Rodzaj wniosku</p>
-            {getStatusBadge(type, app.statusName)}
+            {getStatusBadge(app.statusName)}
           </div>
           <p className={cn(titleClass, "mt-0.5")}>{getAppTitle(permitApp, promiseApp)}</p>
         </div>
@@ -127,20 +105,14 @@ function ExpandedApplicationDetails({
   permitApp,
   promiseApp,
   linkedPermit,
-  isNew,
 }: {
   app: WpaPermitApplicationDto | WpaPromiseApplicationDto;
   permitApp?: WpaPermitApplicationDto | null;
   promiseApp?: WpaPromiseApplicationDto | null;
   linkedPermit?: PermitDto | null;
-  isNew: boolean;
 }) {
   return (
     <div className="space-y-2.5 md:space-y-3">
-      {isNew && (
-        <p className="md:hidden text-[11px] text-blue-700">Nowy wniosek oczekuje na weryfikację</p>
-      )}
-
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 md:gap-x-4">
         <ApplicationDetailField label="Wnioskodawca">
           {app.citizenName}
@@ -233,14 +205,18 @@ export function WpaApplicationReviewBar({
   if (!app || !portalEl) return null;
 
   const Icon = permitApp ? Shield : CreditCard;
-  const isNew = isNewForVerification(type, app.statusName);
-
   return createPortal(
     <div className={cn(contentColumnClass, "py-2 md:py-3")}>
       <p className="sr-only">{contextLabel}</p>
       <div className="rounded-2xl border-none bg-card overflow-hidden">
         <div className="px-3 pt-2.5 pb-3 md:px-6 md:pt-4 md:pb-3">
-          <div className="flex items-start justify-between gap-2 md:gap-3">
+          <button
+            type="button"
+            className="w-full flex items-start justify-between gap-2 md:gap-3 text-left rounded-xl cursor-pointer"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-label={expanded ? "Zwiń szczegóły wniosku" : "Rozwiń szczegóły wniosku"}
+          >
             <div className="flex items-start gap-2.5 md:gap-3 min-w-0 flex-1">
               <CitizenNavIconTile>
                 <Icon />
@@ -250,7 +226,6 @@ export function WpaApplicationReviewBar({
                   app={app}
                   permitApp={permitApp}
                   promiseApp={promiseApp}
-                  type={type}
                   compact
                 />
               </div>
@@ -259,26 +234,17 @@ export function WpaApplicationReviewBar({
                   app={app}
                   permitApp={permitApp}
                   promiseApp={promiseApp}
-                  type={type}
                 />
               </div>
             </div>
-            <button
-              type="button"
-              className="flex items-center shrink-0 text-primary pt-0.5 md:pt-1 rounded-md hover:bg-muted/30 active:bg-muted/30 transition-colors"
-              onClick={() => setExpanded((v) => !v)}
-              aria-expanded={expanded}
-              aria-label={expanded ? "Zwiń szczegóły wniosku" : "Rozwiń szczegóły wniosku"}
-            >
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 md:h-5 md:w-5 text-primary/80 transition-transform duration-200",
-                  expanded && "rotate-180",
-                )}
-                aria-hidden
-              />
-            </button>
-          </div>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 md:h-5 md:w-5 shrink-0 text-primary/80 transition-transform duration-200 mt-0.5 md:mt-1",
+                expanded && "rotate-180",
+              )}
+              aria-hidden
+            />
+          </button>
 
           {expanded && (
             <>
@@ -289,7 +255,6 @@ export function WpaApplicationReviewBar({
                   permitApp={permitApp}
                   promiseApp={promiseApp}
                   linkedPermit={linkedPermit}
-                  isNew={isNew}
                 />
               </div>
             </>

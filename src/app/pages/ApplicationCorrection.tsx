@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { AlertCircle, CreditCard, Shield } from "lucide-react";
+import { CitizenNavIconTile } from "../components/citizen/CitizenNavIconTile";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -188,9 +189,9 @@ export function ApplicationCorrection() {
         <Card className="rounded-2xl border-none shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
-              <div className="bg-primary/10 p-2 rounded-xl text-primary">
-                {type === "permit" ? <Shield className="h-5 w-5" /> : <CreditCard className="h-5 w-5" />}
-              </div>
+              <CitizenNavIconTile className="scale-90 [&_svg]:h-5 [&_svg]:w-5 p-2.5">
+                {type === "permit" ? <Shield /> : <CreditCard />}
+              </CitizenNavIconTile>
               <div>
                 <CardTitle className="text-lg">
                   {type === "permit" ? "Wniosek o pozwolenie" : "Wniosek o e-Promese"}

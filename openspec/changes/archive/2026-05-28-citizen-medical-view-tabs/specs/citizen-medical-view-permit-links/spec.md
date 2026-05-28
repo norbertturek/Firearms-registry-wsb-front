@@ -1,20 +1,4 @@
-## Requirements
-
-### Requirement: Citizen SHALL see complete exam-to-permit mapping
-
-System SHALL present in the citizen medical view all currently known medical and psychological exam validity records for each active permit, including the explicit permit association.
-
-#### Scenario: Build full list from permits
-
-- **WHEN** citizen opens the medical view
-- **THEN** system SHALL fetch citizen permits and present exam entries for each active permit
-- **AND** each permit SHALL expose two entries: medical exam and psychological exam
-
-#### Scenario: Show permit context for each exam entry
-
-- **WHEN** an exam entry is rendered
-- **THEN** system SHALL display permit number and permit type for the associated permit
-- **AND** system SHALL provide navigation to permit details using the associated permit identifier
+## ADDED Requirements
 
 ### Requirement: Citizen medical view SHALL use two attention-focused tabs
 
@@ -48,6 +32,8 @@ When a permit is included in the attention tab, system SHALL render the complete
 - **THEN** the attention tab badge SHALL count permits (permit groups) requiring attention
 - **AND** the full-list tab badge SHALL count permits shown in the full list
 
+## MODIFIED Requirements
+
 ### Requirement: Citizen SHALL see clear exam status per permit
 
 System SHALL calculate and present a deterministic status for each exam entry per permit based on expiry date and available alert signals. Status `missing` SHALL mean missing validity date in the registry for an active permit, not missing medical attachments on a permit application.
@@ -69,13 +55,3 @@ System SHALL calculate and present a deterministic status for each exam entry pe
 - **THEN** system SHALL mark status as missing data with label semantics indicating registry data gap (e.g. "Brak danych")
 - **AND** system SHALL display guidance that exam confirmation requires WPA verification
 - **AND** system SHALL NOT present this state as equivalent to failing to attach certificates when submitting a new permit application
-
-### Requirement: Citizen medical view SHALL remain backend-compatible
-
-System SHALL deliver the new medical view behavior without introducing new backend endpoints or breaking existing API contracts.
-
-#### Scenario: Use existing citizen endpoints only
-
-- **WHEN** medical view data is loaded
-- **THEN** system SHALL use existing citizen endpoints for permits and medical alerts
-- **AND** system SHALL NOT require any backend schema or contract change for this capability

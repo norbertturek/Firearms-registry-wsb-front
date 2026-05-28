@@ -1,9 +1,9 @@
 import { useNavigate } from "react-router";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { FileCheck, Info, ShieldAlert, ClipboardList, QrCode } from "lucide-react";
 import { ReviewCollapsibleCard } from "../components/wpa/ReviewCollapsibleCard";
 import { applicationSectionIcon } from "../components/wpa/ApplicationDetailField";
+import { WpaQuickToolCard } from "../components/wpa/WpaQuickToolCard";
 
 const CATEGORY_RULES: Array<{ permit: string; categories: string[]; color: string }> = [
   { permit: "Sportowe", categories: ["A", "B"], color: "bg-blue-50 text-blue-900" },
@@ -28,22 +28,12 @@ export function ShopDashboard() {
       <div className="mb-4 md:mb-6">
         <h3 className="text-base md:text-lg font-bold mb-2 md:mb-3 px-0.5 text-foreground">Narzędzia sklepu</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
-          <Card
-            className="rounded-2xl border-none shadow-sm hover:bg-muted/30 transition-colors cursor-pointer active:scale-[0.98]"
+          <WpaQuickToolCard
+            title="Nowa sprzedaż"
+            description="Jeden flow: skan/token/numer, potem dane broni i zatwierdzenie."
+            icon={FileCheck}
             onClick={() => navigate("/shop/sale")}
-          >
-            <CardContent className="p-3 md:p-4 flex items-center gap-3 md:gap-4">
-              <div className="bg-primary/10 p-2 md:p-3 rounded-lg md:rounded-xl">
-                <FileCheck className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-sm md:text-base mb-0.5">Nowa sprzedaż</h4>
-                <p className="text-[11px] md:text-xs text-muted-foreground">
-                  Jeden flow: skan/token/numer, potem dane broni i zatwierdzenie.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          />
         </div>
       </div>
 
@@ -75,7 +65,7 @@ export function ShopDashboard() {
         <ReviewCollapsibleCard
           title="Ważne informacje operacyjne"
           description="Ograniczenia i zasady działania panelu sklepu"
-          icon={applicationSectionIcon(<Info />, "bg-blue-100 text-blue-700")}
+          icon={applicationSectionIcon(<Info />)}
         >
           <div className="text-sm text-blue-900 space-y-2">
             <p className="text-blue-800">
@@ -93,7 +83,7 @@ export function ShopDashboard() {
         <ReviewCollapsibleCard
           title="Dopuszczalne kategorie broni wg pozwolenia"
           description="Sprzedaż zostanie odrzucona, jeśli kategoria nie pasuje do typu pozwolenia."
-          icon={applicationSectionIcon(<ShieldAlert />, "bg-orange-100 text-orange-700")}
+          icon={applicationSectionIcon(<ShieldAlert />)}
         >
           <div className="space-y-2">
             {CATEGORY_RULES.map((rule) => (
