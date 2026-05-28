@@ -104,8 +104,16 @@ export const wpaService = {
   },
 
   // CITIZENS
-  async getCitizens(params?: PaginationParams): Promise<PaginatedResult<WpaCitizenDto>> {
-    return api.get<PaginatedResult<WpaCitizenDto>>('/wpa/citizens', params);
+  async getCitizens(params?: PaginationParams & {
+    q?: string;
+    searchBy?: "all" | "name" | "pesel" | "permitNumber";
+    permitType?: PermitType;
+    hasAlerts?: boolean;
+  }): Promise<PaginatedResult<WpaCitizenDto>> {
+    const query: Record<string, unknown> = { ...params };
+    if (params?.permitType) query.permitType = PERMIT_TYPE_VALUES[params.permitType];
+    if (params?.hasAlerts !== undefined) query.hasAlerts = params.hasAlerts;
+    return api.get<PaginatedResult<WpaCitizenDto>>('/wpa/citizens', query);
   },
 
   async getCitizenById(id: string): Promise<WpaCitizenDto> {

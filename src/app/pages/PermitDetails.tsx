@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { CalendarDays, ClipboardList, Shield, Stethoscope, UserCheck } from "lucide-react";
+import { CalendarDays, ClipboardList, Crosshair, Shield, Stethoscope, UserCheck } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Separator } from "../components/ui/separator";
+import { ReviewCollapsibleCard } from "../components/wpa/ReviewCollapsibleCard";
+import { applicationSectionIcon } from "../components/wpa/ApplicationDetailField";
 import { citizenService } from "../../services/citizenService";
 import type { PermitDto } from "../../types/api";
+import { getPermitStatusMeta } from "../../lib/statusUi";
 
 const PERMIT_TYPE_LABELS: Record<string, string> = {
   Sport: "Sportowe",
-  Hunting: "Lowieckie",
+  Hunting: "Łowieckie",
   Collection: "Kolekcjonerskie",
   Protection: "Ochrony osobistej",
   Other: "Inne",
@@ -24,26 +27,17 @@ const PERMIT_CARD_THEMES: Record<string, string> = {
   Other: "bg-gradient-to-br from-slate-700 via-slate-800 to-slate-950 text-white",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  Active: "Aktywne",
-  Suspended: "Zawieszone",
-  Revoked: "Cofniete",
-  Expired: "Wygasle",
-};
-
 function formatDate(date: string | null) {
   if (!date) return "Brak danych";
   return new Date(date).toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" });
 }
 
 function statusBadge(status: string) {
-  if (status === "Active") {
-    return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none rounded-full">Aktywne</Badge>;
+  const meta = getPermitStatusMeta(status);
+  if (!meta) {
+    return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
   }
-  if (status === "Suspended") {
-    return <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none rounded-full">Zawieszone</Badge>;
-  }
-  return <Badge variant="destructive" className="rounded-full">{STATUS_LABELS[status] ?? status}</Badge>;
+  return <Badge variant={meta.variant} className={meta.badgeClassName}>{meta.label}</Badge>;
 }
 
 export function PermitDetails() {
@@ -91,7 +85,7 @@ export function PermitDetails() {
   return (
     <div className="pt-2 space-y-4">
       <div className="px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Szczegoly pozwolenia</h1>
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Szczegóły pozwolenia</h1>
         <p className="text-muted-foreground mt-1">Dokument i limity przypisane do konta</p>
       </div>
 
@@ -99,8 +93,8 @@ export function PermitDetails() {
         <div className="absolute inset-0 opacity-[0.08]">
           <div className="h-full w-full bg-[repeating-linear-gradient(135deg,white_0px,white_1px,transparent_1px,transparent_7px)]" />
         </div>
-        <div className="absolute -right-6 -top-6 opacity-15">
-          <Shield className="h-44 w-44" />
+        <div className="absolute -right-5 -top-6 opacity-15">
+          <Crosshair className="h-32 w-32" />
         </div>
         <div className="relative z-10 min-h-[160px] flex flex-col justify-between">
           <div className="flex items-start justify-between gap-3">
@@ -123,14 +117,13 @@ export function PermitDetails() {
         </div>
       </div>
 
-      <Card className="rounded-2xl border-none shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-primary" />
-            Status i limity
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <ReviewCollapsibleCard
+        title="Status i limity"
+        description="Aktualny status dokumentu oraz wykorzystanie slotów"
+        defaultOpen
+        icon={applicationSectionIcon(<ClipboardList />)}
+      >
+        <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">Status</span>
             {statusBadge(permit.statusName)}
@@ -150,52 +143,48 @@ export function PermitDetails() {
               <p className="text-xl font-bold">{availableSlots}</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </ReviewCollapsibleCard>
 
-      <Card className="rounded-2xl border-none shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <CalendarDays className="h-5 w-5 text-primary" />
-            Terminy
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <ReviewCollapsibleCard
+        title="Terminy"
+        description="Daty wydania i ważności pozwolenia"
+        icon={applicationSectionIcon(<CalendarDays />)}
+      >
+        <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">Data wydania</span>
             <span className="text-sm font-medium text-right">{formatDate(permit.issueDate)}</span>
           </div>
           <Separator />
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-muted-foreground">Wazne do</span>
+            <span className="text-sm text-muted-foreground">Ważne do</span>
             <span className="text-sm font-medium text-right">{formatDate(permit.expiryDate)}</span>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </ReviewCollapsibleCard>
 
-      <Card className="rounded-2xl border-none shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Stethoscope className="h-5 w-5 text-primary" />
-            Badania
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <ReviewCollapsibleCard
+        title="Badania"
+        description="Ważność badań medycznych i psychologicznych"
+        icon={applicationSectionIcon(<Stethoscope />)}
+      >
+        <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-muted-foreground">Lekarskie wazne do</span>
+            <span className="text-sm text-muted-foreground">Lekarskie ważne do</span>
             <span className="text-sm font-medium text-right">{formatDate(permit.medicalExamExpiryDate)}</span>
           </div>
           <Separator />
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-muted-foreground">Psychologiczne wazne do</span>
+            <span className="text-sm text-muted-foreground">Psychologiczne ważne do</span>
             <span className="text-sm font-medium text-right">{formatDate(permit.psychologicalExamExpiryDate)}</span>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </ReviewCollapsibleCard>
 
       <Button className="w-full min-h-[52px] rounded-xl" onClick={() => navigate("/applications/new/promise")}>
         <UserCheck className="h-4 w-4 mr-2" />
-        Zloz wniosek o promese
+        Złóż wniosek o promesę
       </Button>
     </div>
   );

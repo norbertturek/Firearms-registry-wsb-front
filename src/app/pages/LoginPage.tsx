@@ -6,6 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Shield, ShoppingBag, Users, AlertCircle } from "lucide-react";
 import { authService } from "../../services/authService";
+import { AppLogo } from "../components/AppLogo";
 
 const ROLE_CREDENTIALS = {
   citizen: { email: "citizen@example.com", password: "Citizen123!", route: "/citizen" },
@@ -63,10 +64,8 @@ export function LoginPage() {
     <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-background px-4 py-8">
       <div className="w-full max-w-lg">
         <div className="text-center mb-8 flex flex-col items-center">
-          <div className="bg-primary/10 p-4 rounded-3xl mb-4">
-            <Shield className="h-12 w-12 text-primary" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">e-Broń</h1>
+          <AppLogo size="xl" className="mb-4" />
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-2">e-Broń</h1>
           <p className="text-muted-foreground max-w-sm mx-auto">
             Cyfrowy system pozwoleń i rejestracji broni
           </p>

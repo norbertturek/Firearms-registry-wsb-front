@@ -168,7 +168,7 @@ export function ApplicationCorrection() {
   return (
     <div className="pt-2">
       <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Uzupelnij wniosek</h1>
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-1">Uzupelnij wniosek</h1>
         <p className="text-muted-foreground">Popraw dane zgodnie z uwagami WPA i wyslij ponownie</p>
       </div>
 

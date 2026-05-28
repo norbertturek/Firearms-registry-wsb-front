@@ -9,7 +9,10 @@ import { AlertCircle, Shield, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "../components/ui/badge";
 import { citizenService } from "../../services/citizenService";
+import { getEligiblePermitsForPromise } from "../utils/permitEligibility";
+import { PermitRequiredForPromiseNotice } from "../components/citizen/PermitRequiredForPromiseNotice";
 import type { PermitDto } from "../../types/api";
+import { getPermitStatusMeta } from "../../lib/statusUi";
 
 const PERMIT_TYPE_LABELS: Record<string, string> = {
   Sport: "Sportowe",
@@ -50,7 +53,7 @@ export function PromiseApplicationForm() {
   useEffect(() => {
     citizenService
       .getPermits()
-      .then((r) => setPermits(r.filter((p) => p.statusName === "Active" && p.availableSlots > 0)))
+      .then((r) => setPermits(getEligiblePermitsForPromise(r)))
       .catch(() => {})
       .finally(() => setPermitsLoading(false));
   }, []);
@@ -101,11 +104,15 @@ export function PromiseApplicationForm() {
   return (
     <div className="pt-2">
       <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Wniosek o e-Promesę</h1>
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-1">Wniosek o e-Promesę</h1>
         <p className="text-muted-foreground">Złóż wniosek o promesę na zakup broni palnej</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {!permitsLoading && permits.length === 0 ? (
+          <PermitRequiredForPromiseNotice />
+        ) : (
+          <>
         <Card className="rounded-2xl border-none shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Wybierz pozwolenie</CardTitle>
@@ -114,19 +121,6 @@ export function PromiseApplicationForm() {
           <CardContent className="space-y-4">
             {permitsLoading ? (
               <div className="h-12 rounded-xl bg-muted animate-pulse" />
-            ) : permits.length === 0 ? (
-              <div className="text-center py-6 text-muted-foreground">
-                <Shield className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Brak aktywnych pozwoleń z wolnymi slotami</p>
-                <Button
-                  type="button"
-                  variant="link"
-                  className="mt-2"
-                  onClick={() => navigate("/applications/new/permit")}
-                >
-                  Złóż wniosek o pozwolenie
-                </Button>
-              </div>
             ) : (
               <>
                 <div>
@@ -172,9 +166,14 @@ export function PromiseApplicationForm() {
                             <h3 className="font-semibold text-sm">
                               {getPermitTypeLabel(selectedPermit)}
                             </h3>
-                            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none px-2 py-0.5 rounded-full text-xs">
-                              Aktywne
-                            </Badge>
+                            {(() => {
+                              const meta = getPermitStatusMeta(selectedPermit.statusName);
+                              return meta ? (
+                                <Badge variant={meta.variant} className={`${meta.badgeClassName} text-xs`}>
+                                  {meta.label}
+                                </Badge>
+                              ) : null;
+                            })()}
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                             <div>
@@ -270,10 +269,12 @@ export function PromiseApplicationForm() {
           <Button type="button" variant="outline" onClick={() => navigate(-1)} className="min-h-[44px] flex-1 rounded-xl">
             Anuluj
           </Button>
-          <Button type="submit" disabled={loading || permits.length === 0} className="min-h-[44px] flex-1 rounded-xl">
+          <Button type="submit" disabled={loading || permitsLoading || permits.length === 0} className="min-h-[52px] flex-1 rounded-xl">
             {loading ? "Składanie..." : "Złóż wniosek"}
           </Button>
         </div>
+          </>
+        )}
       </form>
     </div>
   );

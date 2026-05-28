@@ -122,6 +122,9 @@ importers:
       embla-carousel-react:
         specifier: 8.6.0
         version: 8.6.0(react@18.3.1)
+      html5-qrcode:
+        specifier: ^2.3.8
+        version: 2.3.8
       input-otp:
         specifier: 1.4.2
         version: 1.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -186,12 +189,21 @@ importers:
         specifier: 1.1.2
         version: 1.1.2(@types/react@19.2.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     devDependencies:
+      '@ngrok/ngrok':
+        specifier: ^1.7.0
+        version: 1.7.0
       '@tailwindcss/vite':
         specifier: 4.1.12
         version: 4.1.12(vite@6.3.5(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.30.1))
       '@vitejs/plugin-react':
         specifier: 4.7.0
         version: 4.7.0(vite@6.3.5(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.30.1))
+      concurrently:
+        specifier: ^9.2.1
+        version: 9.2.1
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       msw:
         specifier: ^2.14.6
         version: 2.14.6(@types/node@25.8.0)
@@ -665,6 +677,91 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
+
+  '@ngrok/ngrok-android-arm64@1.7.0':
+    resolution: {integrity: sha512-8tco3ID6noSaNy+CMS7ewqPoIkIM6XO5COCzsUp3Wv3XEbMSyn65RN6cflX2JdqLfUCHcMyD0ahr9IEiHwqmbQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [android]
+
+  '@ngrok/ngrok-darwin-arm64@1.7.0':
+    resolution: {integrity: sha512-+dmJSOzSO+MNDVrPOca2yYDP1W3KfP4qOlAkarIeFRIfqonQwq3QCBmcR7HAlZocLsSqEwyG6KP4RRvAuT0WGQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@ngrok/ngrok-darwin-universal@1.7.0':
+    resolution: {integrity: sha512-fDEfewyE2pWGFBhOSwQZObeHUkc65U1l+3HIgSOe094TMHsqmyJD0KTCgW9KSn0VP4OvDZbAISi1T3nvqgZYhQ==}
+    engines: {node: '>= 10'}
+    os: [darwin]
+
+  '@ngrok/ngrok-darwin-x64@1.7.0':
+    resolution: {integrity: sha512-+fwMi5uHd9G8BS42MMa9ye6exI5lwTcjUO6Ut497Vu0qgLONdVRenRqnEePV+Q3KtQR7NjqkMnomVfkr9MBjtw==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@ngrok/ngrok-freebsd-x64@1.7.0':
+    resolution: {integrity: sha512-2OGgbrjy3yLRrqAz5N6hlUKIWIXSpR5RjQa2chtZMsSbszQ6c9dI+uVQfOKAeo05tHMUgrYAZ7FocC+ig0dzdQ==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@ngrok/ngrok-linux-arm-gnueabihf@1.7.0':
+    resolution: {integrity: sha512-SN9YIfEQiR9xN90QVNvdgvAemqMLoFVSeTWZs779145hQMhvF9Qd9rnWi6J+2uNNK10OczdV1oc/nq1es7u/3g==}
+    engines: {node: '>= 10'}
+    cpu: [arm]
+    os: [linux]
+
+  '@ngrok/ngrok-linux-arm64-gnu@1.7.0':
+    resolution: {integrity: sha512-KDMgzPKFU2kbpVSaA2RZBBia5IPdJEe063YlyVFnSMJmPYWCUnMwdybBsucXfV9u1Lw/ZjKTKotIlbTWGn3HGw==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@ngrok/ngrok-linux-arm64-musl@1.7.0':
+    resolution: {integrity: sha512-e66vUdVrBlQ0lT9ZdamB4U604zt5Gualt8/WVcUGzbu8s5LajWd6g/mzZCUjK4UepjvMpfgmCp1/+rX7Rk8d5A==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@ngrok/ngrok-linux-x64-gnu@1.7.0':
+    resolution: {integrity: sha512-M6gF0DyOEFqXLfWxObfL3bxYZ4+PnKBHuyLVaqNfFN9Y5utY2mdPOn5422Ppbk4XoIK5/YkuhRqPJl/9FivKEw==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@ngrok/ngrok-linux-x64-musl@1.7.0':
+    resolution: {integrity: sha512-4Ijm0dKeoyzZTMaYxR2EiNjtlK81ebflg/WYIO1XtleFrVy4UJEGnxtxEidYoT4BfCqi4uvXiK2Mx216xXKvog==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@ngrok/ngrok-win32-arm64-msvc@1.7.0':
+    resolution: {integrity: sha512-u7qyWIJI2/YG1HTBnHwUR1+Z2tyGfAsUAItJK/+N1G0FeWJhIWQvSIFJHlaPy4oW1Dc8mSDBX9qvVsiQgLaRFg==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@ngrok/ngrok-win32-ia32-msvc@1.7.0':
+    resolution: {integrity: sha512-/UdYUsLNv/Q8j9YJsyIfq/jLCoD8WP+NidouucTUzSoDtmOsXBBT3itLrmPiZTEdEgKiFYLuC1Zon8XQQvbVLA==}
+    engines: {node: '>= 10'}
+    cpu: [ia32]
+    os: [win32]
+
+  '@ngrok/ngrok-win32-x64-msvc@1.7.0':
+    resolution: {integrity: sha512-UFJg/duEWzZlLkEs61Gz6/5nYhGaKI62I8dvUGdBR3NCtIMagehnFaFxmnXZldyHmCM8U0aCIFNpWRaKcrQkoA==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  '@ngrok/ngrok@1.7.0':
+    resolution: {integrity: sha512-P06o9TpxrJbiRbHQkiwy/rUrlXRupc+Z8KT4MiJfmcdWxvIdzjCaJOdnNkcOTs6DMyzIOefG5tvk/HLdtjqr0g==}
+    engines: {node: '>= 10'}
 
   '@open-draft/deferred-promise@2.2.0':
     resolution: {integrity: sha512-CecwLWx3rhxVQF6V4bAgPS5t+So2sTbPgAzafKkVizyi7tlwpcFpdFqq+wqF2OwNBmqFuu6tOyouTuxgpMfzmA==}
@@ -1675,6 +1772,10 @@ packages:
   canvas-confetti@1.9.4:
     resolution: {integrity: sha512-yxQbJkAVrFXWNbTUjPqjF7G+g6pDotOUHGbkZq2NELZUMDpiJ85rIEazVb8GTaAptNW2miJAXbs1BtioA251Pw==}
 
+  chalk@4.1.2:
+    resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
+    engines: {node: '>=10'}
+
   chownr@3.0.0:
     resolution: {integrity: sha512-+IxzY9BZOQd/XuYPRmrvEVjF/nqj5kgT4kEq7VofrDoM1MxoRjEWkrCC3EtLi59TVawxTAn+orJwFQcrqEN1+g==}
     engines: {node: '>=18'}
@@ -1709,6 +1810,11 @@ packages:
 
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
+
+  concurrently@9.2.1:
+    resolution: {integrity: sha512-fsfrO0MxV64Znoy8/l1vVIjjHa29SZyyqPgQBwhiDcaW8wJc2W3XWVOGx4M3oJBnv/zdUZIIp1gDeS98GzP8Ng==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   convert-source-map@1.9.0:
     resolution: {integrity: sha512-ASFBup0Mz1uyiIjANan1jzLQami9z1PoYSZCiiYW2FczPbenXc45FZdBZLzOT+r6+iciuEModtmCti+hjaAk0A==}
@@ -1798,6 +1904,10 @@ packages:
 
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
+
+  dotenv@17.4.2:
+    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
+    engines: {node: '>=12'}
 
   electron-to-chromium@1.5.354:
     resolution: {integrity: sha512-JaBHwWcfIdmSAfWM5l3uwjGd431j8YEMikZ+K/2nXVuBqJKyZ0f+2h4n4JY5AyNiZmnY9qQr2RU3v9DxDmHMNg==}
@@ -1914,6 +2024,10 @@ packages:
     resolution: {integrity: sha512-BBvQ/406p+4CZbTpCbVPSxfzrZrbnuWSP1ELYgyS6B+hNeKzgrdB4JczCa5VZUBQrDa9hUngm0KnexY6pJRN5Q==}
     engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
 
+  has-flag@4.0.0:
+    resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
+    engines: {node: '>=8'}
+
   hasown@2.0.3:
     resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
     engines: {node: '>= 0.4'}
@@ -1923,6 +2037,9 @@ packages:
 
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
+
+  html5-qrcode@2.3.8:
+    resolution: {integrity: sha512-jsr4vafJhwoLVEDW3n1KvPnCCXWaQfRng0/EEYk1vNcQGcG/htAdhJX0be8YyqMoSz7+hZvOZSTAepsabiuhiQ==}
 
   import-fresh@3.3.1:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
@@ -2339,6 +2456,9 @@ packages:
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
+  rxjs@7.8.2:
+    resolution: {integrity: sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==}
+
   scheduler@0.23.2:
     resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
 
@@ -2351,6 +2471,10 @@ packages:
 
   set-cookie-parser@3.1.0:
     resolution: {integrity: sha512-kjnC1DXBHcxaOaOXBHBeRtltsDG2nUiUni+jP92M9gYdW12rsmx92UsfpH7o5tDRs7I1ZZPSQJQGv3UaRfCiuw==}
+
+  shell-quote@1.8.3:
+    resolution: {integrity: sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw==}
+    engines: {node: '>= 0.4'}
 
   signal-exit@4.1.0:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
@@ -2391,6 +2515,14 @@ packages:
   stylis@4.2.0:
     resolution: {integrity: sha512-Orov6g6BB1sDfYgzWfTHDOxamtX1bE/zo104Dh9e6fqJ3PooipYyfJ0pUmrZO2wAvO8YbEyeFrkV91XTsGMSrw==}
 
+  supports-color@7.2.0:
+    resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
+    engines: {node: '>=8'}
+
+  supports-color@8.1.1:
+    resolution: {integrity: sha512-MpUEN2OodtUzxvKQl72cUF7RQ5EiHsGvSsVG0ia9c5RbWGL2CI4C7EpPS8UTBIplnlzZiNuV56w+FuNxy3ty2Q==}
+    engines: {node: '>=10'}
+
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
@@ -2430,6 +2562,10 @@ packages:
   tough-cookie@6.0.1:
     resolution: {integrity: sha512-LktZQb3IeoUWB9lqR5EWTHgW/VTITCXg4D21M+lvybRVdylLrRMnqaIONLVb5mav8vM19m44HIcGq4qASeu2Qw==}
     engines: {node: '>=16'}
+
+  tree-kill@1.2.2:
+    resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
+    hasBin: true
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
@@ -2991,6 +3127,61 @@ snapshots:
       react-is: 19.2.6
     optionalDependencies:
       '@types/react': 19.2.14
+
+  '@ngrok/ngrok-android-arm64@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-darwin-arm64@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-darwin-universal@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-darwin-x64@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-freebsd-x64@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-linux-arm-gnueabihf@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-linux-arm64-gnu@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-linux-arm64-musl@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-linux-x64-gnu@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-linux-x64-musl@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-win32-arm64-msvc@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-win32-ia32-msvc@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok-win32-x64-msvc@1.7.0':
+    optional: true
+
+  '@ngrok/ngrok@1.7.0':
+    optionalDependencies:
+      '@ngrok/ngrok-android-arm64': 1.7.0
+      '@ngrok/ngrok-darwin-arm64': 1.7.0
+      '@ngrok/ngrok-darwin-universal': 1.7.0
+      '@ngrok/ngrok-darwin-x64': 1.7.0
+      '@ngrok/ngrok-freebsd-x64': 1.7.0
+      '@ngrok/ngrok-linux-arm-gnueabihf': 1.7.0
+      '@ngrok/ngrok-linux-arm64-gnu': 1.7.0
+      '@ngrok/ngrok-linux-arm64-musl': 1.7.0
+      '@ngrok/ngrok-linux-x64-gnu': 1.7.0
+      '@ngrok/ngrok-linux-x64-musl': 1.7.0
+      '@ngrok/ngrok-win32-arm64-msvc': 1.7.0
+      '@ngrok/ngrok-win32-ia32-msvc': 1.7.0
+      '@ngrok/ngrok-win32-x64-msvc': 1.7.0
 
   '@open-draft/deferred-promise@2.2.0': {}
 
@@ -3907,6 +4098,11 @@ snapshots:
 
   canvas-confetti@1.9.4: {}
 
+  chalk@4.1.2:
+    dependencies:
+      ansi-styles: 4.3.0
+      supports-color: 7.2.0
+
   chownr@3.0.0: {}
 
   class-variance-authority@0.7.1:
@@ -3942,6 +4138,15 @@ snapshots:
       color-name: 1.1.4
 
   color-name@1.1.4: {}
+
+  concurrently@9.2.1:
+    dependencies:
+      chalk: 4.1.2
+      rxjs: 7.8.2
+      shell-quote: 1.8.3
+      supports-color: 8.1.1
+      tree-kill: 1.2.2
+      yargs: 17.7.2
 
   convert-source-map@1.9.0: {}
 
@@ -4019,6 +4224,8 @@ snapshots:
     dependencies:
       '@babel/runtime': 7.29.2
       csstype: 3.2.3
+
+  dotenv@17.4.2: {}
 
   electron-to-chromium@1.5.354: {}
 
@@ -4127,6 +4334,8 @@ snapshots:
 
   graphql@16.14.0: {}
 
+  has-flag@4.0.0: {}
+
   hasown@2.0.3:
     dependencies:
       function-bind: 1.1.2
@@ -4139,6 +4348,8 @@ snapshots:
   hoist-non-react-statics@3.3.2:
     dependencies:
       react-is: 16.13.1
+
+  html5-qrcode@2.3.8: {}
 
   import-fresh@3.3.1:
     dependencies:
@@ -4533,6 +4744,10 @@ snapshots:
       '@rollup/rollup-win32-x64-msvc': 4.60.3
       fsevents: 2.3.3
 
+  rxjs@7.8.2:
+    dependencies:
+      tslib: 2.8.1
+
   scheduler@0.23.2:
     dependencies:
       loose-envify: 1.4.0
@@ -4542,6 +4757,8 @@ snapshots:
   set-cookie-parser@2.7.2: {}
 
   set-cookie-parser@3.1.0: {}
+
+  shell-quote@1.8.3: {}
 
   signal-exit@4.1.0: {}
 
@@ -4571,6 +4788,14 @@ snapshots:
       ansi-regex: 5.0.1
 
   stylis@4.2.0: {}
+
+  supports-color@7.2.0:
+    dependencies:
+      has-flag: 4.0.0
+
+  supports-color@8.1.1:
+    dependencies:
+      has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
@@ -4606,6 +4831,8 @@ snapshots:
   tough-cookie@6.0.1:
     dependencies:
       tldts: 7.0.30
+
+  tree-kill@1.2.2: {}
 
   tslib@2.8.1: {}
 

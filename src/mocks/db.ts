@@ -25,7 +25,7 @@ export const IDS = {
 export const permits: any[] = [
   {
     id: IDS.permit1,
-    permitNumber: 'PZ-2024-00001',
+    permitNumber: 'POZW-20240501-DEMO0001',
     permitType: 'Sport',
     permitTypeName: 'Sport',
     status: 'Active',
@@ -36,8 +36,9 @@ export const permits: any[] = [
     usedSlots: 1,
     availableSlots: 4,
     isValid: true,
-    medicalExamExpiryDate: daysFromNow(365),
+    medicalExamExpiryDate: daysFromNow(20),
     psychologicalExamExpiryDate: daysFromNow(365),
+    citizenId: IDS.citizenProfile,
   },
 ];
 
@@ -46,7 +47,7 @@ export const permits: any[] = [
 export const promises: any[] = [
   {
     id: IDS.promise1,
-    promiseNumber: 'PROM-2024-00001',
+    promiseNumber: 'PROM-20240515-DEMO0001',
     weaponType: 'Pistolet sportowy 9mm',
     quantity: 2,
     usedQuantity: 1,
@@ -173,7 +174,7 @@ export const promiseApplications: any[] = [
     citizenName: 'Jan Kowalski',
     citizenPesel: '90010*****',
     permitId: IDS.permit1,
-    permitNumber: 'PZ-2024-00001',
+    permitNumber: 'POZW-20240501-DEMO0001',
     permitType: 'Sport',
     requestedWeaponType: 'Pistolet sportowy 9mm',
     requestedQuantity: 2,
@@ -191,7 +192,7 @@ export const promiseApplications: any[] = [
     citizenName: 'Jan Kowalski',
     citizenPesel: '90010*****',
     permitId: IDS.permit1,
-    permitNumber: 'PZ-2024-00001',
+    permitNumber: 'POZW-20240501-DEMO0001',
     permitType: 'Sport',
     requestedWeaponType: 'Karabinek sportowy CZ 457, kaliber .22LR',
     requestedQuantity: 1,
@@ -209,21 +210,82 @@ export const promiseApplications: any[] = [
 
 export const transferRequests: any[] = [];
 
-// ── Medical alerts ────────────────────────────────────────────────────────────
+// ── Medical alerts (synced from permit exam dates) ────────────────────────────
 
-export const medicalAlerts: any[] = [
-  {
-    id: IDS.alert1,
-    permitId: IDS.permit1,
-    permitNumber: 'PZ-2024-00001',
-    alertType: 'MedicalExamExpiring',
-    alertTypeName: 'MedicalExamExpiring',
-    message: 'Badanie lekarskie wygasa za mniej niż 60 dni. Odwiedź lekarza i zaktualizuj zaświadczenie.',
-    dueDate: daysFromNow(45),
-    isResolved: false,
-    createdAt: daysAgo(1),
-  },
-];
+export const medicalAlerts: any[] = [];
+
+const WARN_DAYS = 30;
+
+export function syncMedicalAlertsFromPermits() {
+  medicalAlerts.length = 0;
+  let alertCounter = 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  permits
+    .filter((p) => p.status === 'Active' || p.statusName === 'Active')
+    .forEach((permit) => {
+      const fields: { type: string; expiring: string; expired: string; label: string; date?: string }[] = [
+        {
+          type: 'medical',
+          expiring: 'MedicalExamExpiring',
+          expired: 'MedicalExamExpired',
+          label: 'Badanie lekarskie',
+          date: permit.medicalExamExpiryDate,
+        },
+        {
+          type: 'psych',
+          expiring: 'PsychologicalExamExpiring',
+          expired: 'PsychologicalExamExpired',
+          label: 'Badanie psychologiczne',
+          date: permit.psychologicalExamExpiryDate,
+        },
+      ];
+
+      fields.forEach(({ expiring, expired, label, date }) => {
+        if (!date) return;
+        const expiry = new Date(date);
+        expiry.setHours(0, 0, 0, 0);
+        const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 3600 * 24));
+
+        if (daysLeft <= 0) {
+          medicalAlerts.push({
+            id: `alert-${++alertCounter}`,
+            citizenId: permit.citizenId ?? IDS.citizenProfile,
+            citizenName: 'Jan Kowalski',
+            citizenPesel: '90010112345',
+            permitId: permit.id,
+            permitNumber: permit.permitNumber,
+            alertType: expired,
+            alertTypeName: expired,
+            message: `${label} wygasło. Pozwolenie ${permit.permitNumber} wymaga odnowienia badań.`,
+            dueDate: date,
+            isResolved: false,
+            createdAt: daysAgo(1),
+          });
+        } else if (daysLeft <= WARN_DAYS) {
+          medicalAlerts.push({
+            id: `alert-${++alertCounter}`,
+            citizenId: permit.citizenId ?? IDS.citizenProfile,
+            citizenName: 'Jan Kowalski',
+            citizenPesel: '90010112345',
+            permitId: permit.id,
+            permitNumber: permit.permitNumber,
+            alertType: expiring,
+            alertTypeName: expiring,
+            message: `${label} wygasa za ${daysLeft} dni (pozwolenie ${permit.permitNumber}).`,
+            dueDate: date,
+            isResolved: false,
+            createdAt: daysAgo(1),
+          });
+        }
+      });
+    });
+
+  if (typeof wpaCitizen !== 'undefined') {
+    wpaCitizen.activeAlerts = medicalAlerts.filter((a) => !a.isResolved).length;
+  }
+}
 
 // ── WPA citizen snapshot ──────────────────────────────────────────────────────
 
@@ -232,15 +294,53 @@ export const wpaCitizen: any = {
   userId: IDS.citizenUser,
   firstName: 'Jan',
   lastName: 'Kowalski',
-  pesel: '90010*****',
+  pesel: '90010112345',
   address: 'ul. Testowa 1, 00-001 Warszawa',
   documentNumber: 'ABC123456',
   weaponBookNumber: 'WB-2024-00001',
   createdAt: daysAgo(400),
-  permits: [{ permitNumber: 'PZ-2024-00001', permitTypeName: 'Sport' }],
+  permits: [{ permitNumber: 'POZW-20240501-DEMO0001', permitTypeName: 'Sport' }],
   totalFirearms: 1,
   activeAlerts: 1,
 };
+
+export const wpaCitizens: any[] = [
+  wpaCitizen,
+  {
+    id: 'citizen-002',
+    userId: 'user-citizen-002',
+    firstName: 'Anna',
+    lastName: 'Nowak',
+    pesel: '85050567890',
+    address: 'ul. Polna 12, 30-001 Kraków',
+    documentNumber: 'DEF789012',
+    weaponBookNumber: 'WB-2023-00042',
+    createdAt: daysAgo(320),
+    permits: [{ permitNumber: 'POZW-20240315-DEMO0002', permitTypeName: 'Hunting' }],
+    totalFirearms: 2,
+    activeAlerts: 0,
+  },
+  {
+    id: 'citizen-003',
+    userId: 'user-citizen-003',
+    firstName: 'Piotr',
+    lastName: 'Wiśniewski',
+    pesel: '92021234567',
+    address: 'ul. Leśna 5, 80-001 Gdańsk',
+    documentNumber: 'GHI345678',
+    weaponBookNumber: 'WB-2024-00018',
+    createdAt: daysAgo(180),
+    permits: [
+      { permitNumber: 'POZW-20240601-DEMO0003', permitTypeName: 'Collection' },
+      { permitNumber: 'POZW-20240710-DEMO0004', permitTypeName: 'Sport' },
+    ],
+    totalFirearms: 3,
+    activeAlerts: 2,
+  },
+];
+
+syncMedicalAlertsFromPermits();
+wpaCitizen.activeAlerts = medicalAlerts.filter((a) => !a.isResolved).length;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

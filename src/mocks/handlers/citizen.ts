@@ -190,5 +190,8 @@ export const citizenHandlers = [
   }),
 
   // ── Medical alerts ─────────────────────────────────────────────────────────
-  http.get(`${BASE}/citizen/me/medical-alerts`, () => HttpResponse.json(db.medicalAlerts)),
+  http.get(`${BASE}/citizen/me/medical-alerts`, () => {
+    db.syncMedicalAlertsFromPermits();
+    return HttpResponse.json(db.medicalAlerts.filter((a) => !a.isResolved));
+  }),
 ];

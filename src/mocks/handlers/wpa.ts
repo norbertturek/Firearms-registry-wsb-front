@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw';
 import * as db from '../db';
+import { generatePermitNumber, generatePromiseNumber } from '../../lib/registryNumbers';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
 const OFFICER_NAME = 'sgt. Mariusz Nowak';
@@ -45,7 +46,7 @@ export const wpaHandlers = [
     });
     db.permits.push({
       id: db.uid(),
-      permitNumber: `PZ-${new Date().getFullYear()}-${String(db.permits.length + 1).padStart(5, '0')}`,
+      permitNumber: generatePermitNumber(),
       permitType: app.requestedPermitType,
       permitTypeName: app.requestedPermitTypeName,
       status: 'Active',
@@ -123,7 +124,7 @@ export const wpaHandlers = [
     });
     db.promises.push({
       id: db.uid(),
-      promiseNumber: `PROM-${new Date().getFullYear()}-${String(db.promises.length + 1).padStart(5, '0')}`,
+      promiseNumber: generatePromiseNumber(),
       weaponType: app.requestedWeaponType,
       quantity: app.requestedQuantity,
       usedQuantity: 0,
@@ -170,7 +171,46 @@ export const wpaHandlers = [
   // ── Citizens ───────────────────────────────────────────────────────────────
   http.get(`${BASE}/wpa/citizens`, ({ request }) => {
     const url = new URL(request.url);
-    return HttpResponse.json(db.paginate([db.wpaCitizen], qp(url, 'page', 1), qp(url, 'pageSize', 20)));
+    const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
+    const searchBy = url.searchParams.get('searchBy') ?? 'all';
+    const permitType = url.searchParams.get('permitType');
+    const hasAlerts = url.searchParams.get('hasAlerts');
+
+    let items = db.wpaCitizens.map((c) => ({
+      ...c,
+      activeAlerts: Math.max(
+        c.activeAlerts ?? 0,
+        db.medicalAlerts.filter((a) => a.citizenId === c.id && !a.isResolved).length,
+      ),
+    }));
+
+    if (q) {
+      items = items.filter((c) => {
+        const fullName = `${c.firstName} ${c.lastName}`.toLowerCase();
+        const permitNumbers = (c.permits ?? []).map((p: { permitNumber: string }) => p.permitNumber.toLowerCase());
+        if (searchBy === 'name') return fullName.includes(q);
+        if (searchBy === 'pesel') return String(c.pesel).includes(q);
+        if (searchBy === 'permitNumber') return permitNumbers.some((n: string) => n.includes(q));
+        return (
+          fullName.includes(q)
+          || String(c.pesel).includes(q)
+          || permitNumbers.some((n: string) => n.includes(q))
+          || String(c.weaponBookNumber ?? '').toLowerCase().includes(q)
+        );
+      });
+    }
+
+    if (permitType) {
+      items = items.filter((c) =>
+        (c.permits ?? []).some((p: { permitTypeName: string }) => p.permitTypeName === permitType),
+      );
+    }
+
+    if (hasAlerts === 'true') {
+      items = items.filter((c) => c.activeAlerts > 0);
+    }
+
+    return HttpResponse.json(db.paginate(items, qp(url, 'page', 1), qp(url, 'pageSize', 20)));
   }),
 
   http.get(`${BASE}/wpa/citizens/:id`, ({ params }) => {
@@ -201,8 +241,8 @@ export const wpaHandlers = [
         serialNumber: f.serialNumber,
         status: f.status,
         ownerName: 'Jan Kowalski',
-        ownerPesel: '90010*****',
-        permitNumber: 'PZ-2024-00001',
+        ownerPesel: '90010112345',
+        permitNumber: 'POZW-20240501-DEMO0001',
         permitType: 'Sport',
         registeredAt: f.registeredAt,
       }))
@@ -218,6 +258,7 @@ export const wpaHandlers = [
 
   // ── Medical alerts ─────────────────────────────────────────────────────────
   http.get(`${BASE}/wpa/medical-alerts`, ({ request }) => {
+    db.syncMedicalAlertsFromPermits();
     const url = new URL(request.url);
     const resolvedFilter = url.searchParams.get('resolved');
     const items = db.medicalAlerts
@@ -254,6 +295,7 @@ export const wpaHandlers = [
     const body = await request.json() as any;
     p.medicalExamExpiryDate = body.medicalExamExpiryDate;
     p.psychologicalExamExpiryDate = body.psychologicalExamExpiryDate;
+    db.syncMedicalAlertsFromPermits();
     return new HttpResponse(null, { status: 204 });
   }),
 ];

@@ -70,7 +70,7 @@ export function ApplicationForm() {
   return (
     <div className="pt-2">
       <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Wniosek o pozwolenie</h1>
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-1">Wniosek o pozwolenie</h1>
         <p className="text-muted-foreground">Wypełnij formularz, aby złożyć wniosek</p>
       </div>
 
@@ -458,7 +458,7 @@ export function ApplicationForm() {
         </Card>
 
         <div className="flex gap-3">
-          <Button type="submit" className="min-h-[44px] flex-1">
+          <Button type="submit" className="min-h-[52px] flex-1 rounded-xl">
             Złóż wniosek
           </Button>
         </div>

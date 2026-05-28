@@ -269,7 +269,7 @@ export interface CreateTransferRequestRequest {
 }
 
 // ============================================================================
-// MEDICAL ALERTS (Citizen view - computed from permits on frontend)
+// MEDICAL ALERTS (Citizen view — synced from permit exam dates via API)
 // ============================================================================
 
 export interface CitizenMedicalAlertDto {

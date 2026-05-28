@@ -11,7 +11,6 @@ import { ApplicationsList } from "./pages/ApplicationsList";
 import { ApplicationDetails } from "./pages/ApplicationDetails";
 import { WeaponRegistry } from "./pages/WeaponRegistry";
 import { DecisionPage } from "./pages/DecisionPage";
-import { ShopVerification } from "./pages/ShopVerification";
 import { ShopSalePage } from "./pages/ShopSalePage";
 import { NotFound } from "./pages/NotFound";
 import { PermitApplicationForm } from "./pages/PermitApplicationForm";
@@ -33,7 +32,7 @@ export const router = createBrowserRouter([
       { path: "citizen", Component: CitizenDashboard },
       { path: "officer", Component: OfficerDashboard },
       { path: "shop", Component: ShopDashboard },
-      { path: "shop/verify", Component: ShopVerification },
+      { path: "shop/verify", Component: () => <RedirectTo to="/shop/sale" /> },
       { path: "shop/sale", Component: ShopSalePage },
 
       // Legacy URLs

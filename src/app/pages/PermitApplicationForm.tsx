@@ -93,7 +93,7 @@ export function PermitApplicationForm() {
   return (
     <div className="pt-2">
       <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-1">
           Wniosek o pozwolenie na broń
         </h1>
         <p className="text-muted-foreground">Złóż wniosek o wydanie pozwolenia na posiadanie broni palnej</p>
@@ -218,7 +218,7 @@ export function PermitApplicationForm() {
           <Button type="button" variant="outline" onClick={() => navigate(-1)} className="min-h-[44px] flex-1 rounded-xl">
             Anuluj
           </Button>
-          <Button type="submit" disabled={loading} className="min-h-[44px] flex-1 rounded-xl">
+          <Button type="submit" disabled={loading} className="min-h-[52px] flex-1 rounded-xl">
             {loading ? "Składanie..." : "Złóż wniosek"}
           </Button>
         </div>

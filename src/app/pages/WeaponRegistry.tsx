@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router";
+import { CitizenFirearmCard } from "../components/citizen/CitizenFirearmCard";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -12,27 +12,23 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import { Label } from "../components/ui/label";
+import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
-import { Shield, Search, ChevronDown, ChevronUp, AlertTriangle, ArrowRightLeft, AlertCircle } from "lucide-react";
-import { Separator } from "../components/ui/separator";
+import { Shield, AlertTriangle, ArrowRightLeft, AlertCircle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { SearchBarWithFilters } from "../components/search/SearchBarWithFilters";
+import { SearchFiltersSheet, SearchFilterField, filterSelectTriggerClass } from "../components/search/SearchFiltersSheet";
 import { toast } from "sonner";
 import { citizenService, translateTransferError } from "../../services/citizenService";
 import type { FirearmDto, TransferType } from "../../types/api";
+import { getFirearmStatusMeta } from "../../lib/statusUi";
 
 function getStatusBadge(status: string) {
-  switch (status) {
-    case "Registered":
-      return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none px-2 py-0.5 rounded-full">Zarejestrowana</Badge>;
-    case "Transferred":
-      return <Badge variant="secondary" className="rounded-full px-2 py-0.5">Przeniesiona</Badge>;
-    case "Lost":
-      return <Badge variant="destructive" className="rounded-full px-2 py-0.5">Zgubiona/Skradziona</Badge>;
-    case "Archived":
-      return <Badge variant="secondary" className="rounded-full px-2 py-0.5">Zarchiwizowana</Badge>;
-    default:
-      return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
+  const meta = getFirearmStatusMeta(status);
+  if (!meta) {
+    return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
   }
+  return <Badge variant={meta.variant} className={meta.badgeClassName}>{meta.label}</Badge>;
 }
 
 function getCategoryBadge(category: "A" | "B" | "C") {
@@ -53,10 +49,27 @@ function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("pl-PL", { day: "numeric", month: "short", year: "numeric" });
 }
 
+type WeaponSearchBy = "all" | "brand" | "model" | "serial" | "caliber";
+type WeaponCategoryFilter = "all" | "A" | "B" | "C";
+
 export function WeaponRegistry() {
+  const navigate = useNavigate();
+  const isOfficer = localStorage.getItem("userRole") === "officer";
+
+  useEffect(() => {
+    if (isOfficer) {
+      navigate("/wpa/search?tab=firearms", { replace: true });
+    }
+  }, [isOfficer, navigate]);
+
   const [firearms, setFirearms] = useState<FirearmDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchBy, setSearchBy] = useState<WeaponSearchBy>("all");
+  const [categoryFilter, setCategoryFilter] = useState<WeaponCategoryFilter>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftSearchBy, setDraftSearchBy] = useState<WeaponSearchBy>("all");
+  const [draftCategoryFilter, setDraftCategoryFilter] = useState<WeaponCategoryFilter>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [reportLostId, setReportLostId] = useState<string | null>(null);
   const [lostDescription, setLostDescription] = useState("");
@@ -78,18 +91,71 @@ export function WeaponRegistry() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!isOfficer) load();
+  }, [isOfficer]);
 
   const filtered = firearms.filter((f) => {
     const s = searchTerm.toLowerCase();
+    const matchCategory = categoryFilter === "all" || f.categoryName === categoryFilter;
+    if (!matchCategory) return false;
+    if (!searchTerm) return true;
+    if (searchBy === "brand") return f.brand.toLowerCase().includes(s);
+    if (searchBy === "model") return f.model.toLowerCase().includes(s);
+    if (searchBy === "serial") return f.serialNumber.toLowerCase().includes(s);
+    if (searchBy === "caliber") return f.caliber.toLowerCase().includes(s);
     return (
-      !searchTerm ||
-      f.brand.toLowerCase().includes(s) ||
-      f.model.toLowerCase().includes(s) ||
-      f.serialNumber.toLowerCase().includes(s) ||
-      f.caliber.toLowerCase().includes(s)
+      f.brand.toLowerCase().includes(s)
+      || f.model.toLowerCase().includes(s)
+      || f.serialNumber.toLowerCase().includes(s)
+      || f.caliber.toLowerCase().includes(s)
     );
   });
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (searchBy !== "all") count += 1;
+    if (categoryFilter !== "all") count += 1;
+    return count;
+  }, [searchBy, categoryFilter]);
+
+  const searchPlaceholder =
+    searchBy === "brand" ? "Marka..."
+    : searchBy === "model" ? "Model..."
+    : searchBy === "serial" ? "Numer seryjny..."
+    : searchBy === "caliber" ? "Kaliber..."
+    : "Marka, model, numer seryjny, kaliber...";
+
+  const openFilters = () => {
+    setDraftSearchBy(searchBy);
+    setDraftCategoryFilter(categoryFilter);
+    setFiltersOpen(true);
+  };
+
+  const applyFilters = () => {
+    setSearchBy(draftSearchBy);
+    setCategoryFilter(draftCategoryFilter);
+    setFiltersOpen(false);
+  };
+
+  const resetFilters = () => {
+    setDraftSearchBy("all");
+    setDraftCategoryFilter("all");
+  };
+
+  const clearActiveFilters = () => {
+    setSearchBy("all");
+    setCategoryFilter("all");
+    setDraftSearchBy("all");
+    setDraftCategoryFilter("all");
+  };
+
+  const clearSearchAndFilters = () => {
+    setSearchTerm("");
+    clearActiveFilters();
+  };
+
+  const hasActiveQuery = searchTerm.length > 0 || activeFilterCount > 0;
 
   const handleReportLost = async () => {
     if (!reportLostId) return;
@@ -151,6 +217,10 @@ export function WeaponRegistry() {
     }
   };
 
+  if (isOfficer) {
+    return null;
+  }
+
   if (loading) {
     return (
       <div className="pt-2 space-y-4">
@@ -164,173 +234,152 @@ export function WeaponRegistry() {
   }
 
   return (
-    <div className="pt-2">
-      <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Rejestr broni</h1>
-        <p className="text-muted-foreground">Twoje zarejestrowane egzemplarze</p>
+    <div className="pt-2 max-md:pb-2">
+      <div className="mb-4 px-1">
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-1">Rejestr broni</h1>
+        <p className="text-sm text-muted-foreground">Twoje zarejestrowane egzemplarze</p>
       </div>
 
-      <Card className="mb-6 rounded-2xl border-none shadow-sm">
-        <CardContent className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Marka, model, numer seryjny, kaliber..."
-              className="min-h-[44px] pl-10 rounded-xl"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <SearchBarWithFilters
+        className="mb-4"
+        value={searchTerm}
+        onValueChange={setSearchTerm}
+        placeholder={searchPlaceholder}
+        ariaLabel="Wyszukaj broń"
+        activeFilterCount={activeFilterCount}
+        onFiltersClick={openFilters}
+      />
 
-      <Card className="rounded-2xl border-none shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Zarejestrowana broń ({filtered.length})</CardTitle>
-          <CardDescription>
-            {searchTerm ? `Wyniki wyszukiwania dla: "${searchTerm}"` : "Wszystkie egzemplarze w rejestrze"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filtered.length > 0 ? (
-            <div className="space-y-3">
-              {filtered.map((firearm) => (
-                <div key={firearm.id} className="bg-muted/30 border border-transparent rounded-2xl overflow-hidden transition-all duration-200">
-                  <div
-                    className="p-4 hover:bg-muted/50 cursor-pointer active:scale-[0.99] select-none"
-                    onClick={() => setExpandedId(expandedId === firearm.id ? null : firearm.id)}
-                  >
-                    <div className="flex gap-4 flex-1">
-                      <div className="flex items-center justify-center w-14 h-14 bg-primary/10 rounded-xl shrink-0 mt-1">
-                        <Shield className="h-7 w-7 text-primary" />
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-semibold text-base text-foreground">
-                                {firearm.brand} {firearm.model}
-                              </h3>
-                              {getCategoryBadge(firearm.categoryName as "A" | "B" | "C")}
+      <SearchFiltersSheet
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        description="Ogranicz listę broni"
+        onApply={applyFilters}
+        onReset={resetFilters}
+      >
+        <SearchFilterField label="Szukaj w polu" htmlFor="weaponSearchBy">
+          <Select value={draftSearchBy} onValueChange={(v) => setDraftSearchBy(v as WeaponSearchBy)}>
+            <SelectTrigger id="weaponSearchBy" className={filterSelectTriggerClass}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-[70] rounded-xl">
+              <SelectItem value="all">Wszystkie pola</SelectItem>
+              <SelectItem value="brand">Marka</SelectItem>
+              <SelectItem value="model">Model</SelectItem>
+              <SelectItem value="serial">Numer seryjny</SelectItem>
+              <SelectItem value="caliber">Kaliber</SelectItem>
+            </SelectContent>
+          </Select>
+        </SearchFilterField>
+        <SearchFilterField label="Kategoria" htmlFor="categoryFilter">
+          <Select value={draftCategoryFilter} onValueChange={(v) => setDraftCategoryFilter(v as WeaponCategoryFilter)}>
+            <SelectTrigger id="categoryFilter" className={filterSelectTriggerClass}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-[70] rounded-xl">
+              <SelectItem value="all">Wszystkie</SelectItem>
+              <SelectItem value="A">Kat. A</SelectItem>
+              <SelectItem value="B">Kat. B</SelectItem>
+              <SelectItem value="C">Kat. C</SelectItem>
+            </SelectContent>
+          </Select>
+        </SearchFilterField>
+      </SearchFiltersSheet>
+
+      {filtered.length > 0 ? (
+        <>
+          <p className="text-sm text-muted-foreground mb-3 px-1">
+            {searchTerm ? `Wyniki dla „${searchTerm}”` : `${filtered.length} egzemplarzy w rejestrze`}
+          </p>
+          <div className="space-y-3">
+            {filtered.map((firearm) => {
+              const isExpanded = expandedId === firearm.id;
+              return (
+                <CitizenFirearmCard
+                  key={firearm.id}
+                  firearm={firearm}
+                  expanded={isExpanded}
+                  onToggle={() => setExpandedId(isExpanded ? null : firearm.id)}
+                  statusBadge={getStatusBadge(firearm.statusName)}
+                  categoryBadge={getCategoryBadge(firearm.categoryName as "A" | "B" | "C")}
+                  formatDate={formatDate}
+                >
+                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground mb-1 text-xs uppercase tracking-wider font-semibold">Dane dokumentu</p>
+                        <div className="space-y-2">
+                          {firearm.productionYear && (
+                            <div>
+                              <span className="text-muted-foreground text-xs block">Rok produkcji</span>
+                              <span className="font-medium text-foreground">{firearm.productionYear}</span>
                             </div>
-                            <p className="text-xs font-medium text-muted-foreground">Kaliber: {firearm.caliber}</p>
-                          </div>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full -mt-1 -mr-2 text-muted-foreground">
-                            {expandedId === firearm.id ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                          </Button>
+                          )}
                         </div>
-
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground mb-1 text-xs uppercase tracking-wider font-semibold">Identyfikacja</p>
+                        <div className="space-y-2">
                           <div>
-                            <span className="text-muted-foreground block">Nr seryjny:</span>
-                            <span className="font-mono">{firearm.serialNumber}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground block">Rejestracja:</span>
-                            <span className="font-medium">{formatDate(firearm.registeredAt)}</span>
+                            <span className="text-muted-foreground text-xs block">Nr seryjny</span>
+                            <span className="font-mono font-medium text-foreground">{firearm.serialNumber}</span>
                           </div>
                         </div>
-
-                        {expandedId !== firearm.id && (
-                          <div className="pt-1">{getStatusBadge(firearm.statusName)}</div>
-                        )}
                       </div>
                     </div>
+
+                    <div className="bg-primary/5 rounded-xl p-3 flex gap-3 items-start border border-primary/10">
+                      <AlertTriangle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Przypominamy o obowiązku posiadania legitymacji broni podczas jej noszenia.
+                      </p>
+                    </div>
+
+                    {firearm.statusName === "Registered" && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl"
+                          onClick={() => openTransfer(firearm.id)}
+                        >
+                          <ArrowRightLeft className="h-4 w-4 mr-2" />
+                          Transferuj
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="rounded-xl"
+                          onClick={() => {
+                            setReportLostId(firearm.id);
+                            setLostDescription("");
+                          }}
+                        >
+                          Zgłoś utratę / kradzież
+                        </Button>
+                      </div>
+                    )}
                   </div>
-
-                  {expandedId === firearm.id && (
-                    <div className="px-4 pb-4 pt-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                      <Separator className="bg-border mb-4" />
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <p className="text-muted-foreground mb-1 text-xs uppercase tracking-wider font-semibold">Dane dokumentu</p>
-                            <div className="space-y-2">
-                              <div>
-                                <span className="text-muted-foreground text-xs block">Status</span>
-                                <div>{getStatusBadge(firearm.statusName)}</div>
-                              </div>
-                              {firearm.productionYear && (
-                                <div>
-                                  <span className="text-muted-foreground text-xs block">Rok produkcji</span>
-                                  <span className="font-medium text-foreground">{firearm.productionYear}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground mb-1 text-xs uppercase tracking-wider font-semibold">Identyfikacja</p>
-                            <div className="space-y-2">
-                              <div>
-                                <span className="text-muted-foreground text-xs block">Nr seryjny</span>
-                                <span className="font-mono font-medium text-foreground">{firearm.serialNumber}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground text-xs block">Kategoria</span>
-                                {getCategoryBadge(firearm.categoryName as "A" | "B" | "C")}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-primary/5 rounded-xl p-3 flex gap-3 items-start border border-primary/10">
-                          <AlertTriangle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            Przypominamy o obowiązku posiadania legitymacji broni podczas jej noszenia.
-                          </p>
-                        </div>
-
-                        {firearm.statusName === "Registered" && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full rounded-xl"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openTransfer(firearm.id);
-                              }}
-                            >
-                              <ArrowRightLeft className="h-4 w-4 mr-2" />
-                              Transferuj
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="w-full rounded-xl"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setReportLostId(firearm.id);
-                                setLostDescription("");
-                              }}
-                            >
-                              Zgłoś utratę / kradzież
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                </CitizenFirearmCard>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="text-center py-12 text-muted-foreground">
+          <Shield className="h-16 w-16 mx-auto mb-4 opacity-30 text-primary" />
+          {hasActiveQuery ? (
+            <>
+              <p className="mb-2">Brak broni dla wybranych kryteriów wyszukiwania</p>
+              <Button variant="outline" onClick={clearSearchAndFilters} className="min-h-[44px] rounded-xl mt-2" aria-label="Wyczyść filtry">
+                Wyczyść filtry
+              </Button>
+            </>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <Shield className="h-16 w-16 mx-auto mb-4 opacity-30 text-primary" />
-              {searchTerm ? (
-                <>
-                  <p className="mb-2">Nie znaleziono broni spełniającej kryteria</p>
-                  <Button variant="outline" onClick={() => setSearchTerm("")} className="min-h-[44px] rounded-xl mt-2">
-                    Wyczyść wyszukiwanie
-                  </Button>
-                </>
-              ) : (
-                <p className="mb-4">Nie masz jeszcze zarejestrowanej broni. Broń pojawi się tutaj po zakupie w sklepie.</p>
-              )}
-            </div>
+            <p className="mb-4">Nie masz jeszcze zarejestrowanej broni. Broń pojawi się tutaj po zakupie w sklepie.</p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       {/* Report Lost Dialog */}
       <Dialog open={!!reportLostId} onOpenChange={(open) => !open && setReportLostId(null)}>

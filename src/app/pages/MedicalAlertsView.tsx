@@ -1,171 +1,303 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { AlertTriangle, CheckCircle, XCircle, Calendar, Shield, FileText } from "lucide-react";
+import { Tabs, TabsContent, TabsTrigger } from "../components/ui/tabs";
+import { AppTabsList } from "../components/ui/AppTabsList";
+import type { LucideIcon } from "lucide-react";
+import { CheckCircle, ChevronRight, Shield, Stethoscope, UserCheck } from "lucide-react";
+import { cn } from "../components/ui/utils";
+import { CitizenNavIconTile } from "../components/citizen/CitizenNavIconTile";
+import { CITIZEN_LIST_CARD_CONTENT_CLASS } from "../utils/citizenCardUi";
+import { DateStatusMeta } from "../components/DateStatusMeta";
 import { useNavigate } from "react-router";
 import { citizenService } from "../../services/citizenService";
-import type { PermitDto } from "../../types/api";
+import type { CitizenMedicalAlertDto, PermitDto } from "../../types/api";
+import { formatMedicalAlertDate, getDaysUntilDueDate } from "../../lib/medicalAlerts";
 
-type AlertItem = {
+type ExamType = "medical" | "psychological";
+type ExamStatus = "current" | "expiring" | "expired" | "missing";
+
+interface PermitExamEntry {
   id: string;
   permitId: string;
   permitNumber: string;
-  alertType: "MedicalExamExpiring" | "MedicalExamExpired" | "PsychologicalExamExpiring" | "PsychologicalExamExpired";
-  expiryDate: string;
-  daysUntilExpiry: number;
+  permitTypeName: string;
+  examType: ExamType;
+  expiryDate: string | null;
+  daysLeft: number | null;
+  status: ExamStatus;
+  alertMessage: string | null;
+}
+
+interface PermitExamGroup {
+  permitId: string;
+  permitNumber: string;
+  permitTypeName: string;
+  exams: PermitExamEntry[];
+}
+
+const WARNING_DAYS = 30;
+
+const PERMIT_TYPE_LABELS: Record<string, string> = {
+  Sport: "Sportowe",
+  Hunting: "Łowieckie",
+  Collection: "Kolekcjonerskie",
+  Protection: "Ochrony osobistej",
+  Other: "Inne",
 };
 
-function computeAlerts(permits: PermitDto[]): AlertItem[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const WARN_DAYS = 30;
-  const alerts: AlertItem[] = [];
+function examLabel(type: ExamType) {
+  return type === "medical" ? "Badanie lekarskie" : "Badanie psychologiczne";
+}
 
-  permits
-    .filter((p) => p.statusName === "Active")
-    .forEach((p) => {
-      const fields: { type: "Medical" | "Psychological"; date: string | null }[] = [
-        { type: "Medical", date: p.medicalExamExpiryDate },
-        { type: "Psychological", date: p.psychologicalExamExpiryDate },
-      ];
+function examIcon(type: ExamType): LucideIcon {
+  return type === "medical" ? Stethoscope : UserCheck;
+}
 
-      fields.forEach(({ type, date }) => {
-        if (!date) return;
-        const expiry = new Date(date);
-        expiry.setHours(0, 0, 0, 0);
-        const diff = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 3600 * 24));
+function buildAlertMap(alerts: CitizenMedicalAlertDto[]) {
+  const map = new Map<string, CitizenMedicalAlertDto>();
+  for (const alert of alerts) {
+    const key = `${alert.permitId}:${alert.alertTypeName}`;
+    map.set(key, alert);
+  }
+  return map;
+}
 
-        if (diff <= 0) {
-          alerts.push({
-            id: `${p.id}-${type}-expired`,
-            permitId: p.id,
-            permitNumber: p.permitNumber,
-            alertType: type === "Medical" ? "MedicalExamExpired" : "PsychologicalExamExpired",
-            expiryDate: date,
-            daysUntilExpiry: diff,
-          });
-        } else if (diff <= WARN_DAYS) {
-          alerts.push({
-            id: `${p.id}-${type}-expiring`,
-            permitId: p.id,
-            permitNumber: p.permitNumber,
-            alertType: type === "Medical" ? "MedicalExamExpiring" : "PsychologicalExamExpiring",
-            expiryDate: date,
-            daysUntilExpiry: diff,
-          });
-        }
-      });
+function resolveStatus(
+  expiryDate: string | null,
+  expiredAlert: CitizenMedicalAlertDto | undefined,
+  expiringAlert: CitizenMedicalAlertDto | undefined
+): { status: ExamStatus; daysLeft: number | null; alertMessage: string | null } {
+  const daysLeft = getDaysUntilDueDate(expiryDate);
+  if (daysLeft == null) {
+    return {
+      status: "missing",
+      daysLeft: null,
+      alertMessage: "Brak daty ważności. WPA musi potwierdzić i uzupełnić dane badań.",
+    };
+  }
+  if (daysLeft <= 0 || expiredAlert) {
+    return { status: "expired", daysLeft, alertMessage: expiredAlert?.message ?? null };
+  }
+  if (daysLeft <= WARNING_DAYS || expiringAlert) {
+    return { status: "expiring", daysLeft, alertMessage: expiringAlert?.message ?? null };
+  }
+  return { status: "current", daysLeft, alertMessage: null };
+}
+
+function mapPermitExamEntries(permits: PermitDto[], alerts: CitizenMedicalAlertDto[]): PermitExamEntry[] {
+  const alertMap = buildAlertMap(alerts);
+  const activePermits = permits.filter((permit) => permit.statusName === "Active");
+  const entries: PermitExamEntry[] = [];
+
+  for (const permit of activePermits) {
+    const medicalExpired = alertMap.get(`${permit.id}:MedicalExamExpired`);
+    const medicalExpiring = alertMap.get(`${permit.id}:MedicalExamExpiring`);
+    const psychExpired = alertMap.get(`${permit.id}:PsychologicalExamExpired`);
+    const psychExpiring = alertMap.get(`${permit.id}:PsychologicalExamExpiring`);
+
+    const medical = resolveStatus(permit.medicalExamExpiryDate, medicalExpired, medicalExpiring);
+    entries.push({
+      id: `${permit.id}:medical`,
+      permitId: permit.id,
+      permitNumber: permit.permitNumber,
+      permitTypeName: permit.permitTypeName,
+      examType: "medical",
+      expiryDate: permit.medicalExamExpiryDate,
+      daysLeft: medical.daysLeft,
+      status: medical.status,
+      alertMessage: medical.alertMessage,
     });
 
-  return alerts;
-}
-
-function getAlertTypeLabel(type: string) {
-  switch (type) {
-    case "MedicalExamExpiring": return "Badanie lekarskie wkrótce wygasa";
-    case "PsychologicalExamExpiring": return "Badanie psychologiczne wkrótce wygasa";
-    case "MedicalExamExpired": return "Badanie lekarskie wygasło";
-    case "PsychologicalExamExpired": return "Badanie psychologiczne wygasło";
-    default: return type;
+    const psychological = resolveStatus(permit.psychologicalExamExpiryDate, psychExpired, psychExpiring);
+    entries.push({
+      id: `${permit.id}:psychological`,
+      permitId: permit.id,
+      permitNumber: permit.permitNumber,
+      permitTypeName: permit.permitTypeName,
+      examType: "psychological",
+      expiryDate: permit.psychologicalExamExpiryDate,
+      daysLeft: psychological.daysLeft,
+      status: psychological.status,
+      alertMessage: psychological.alertMessage,
+    });
   }
+
+  return entries;
 }
 
-function getAlertBadge(daysLeft: number) {
-  if (daysLeft <= 0) {
-    return (
-      <Badge variant="destructive" className="px-2 py-0.5 rounded-full">
-        <XCircle className="h-3 w-3 mr-1" />Wygasło
-      </Badge>
-    );
-  } else if (daysLeft <= 7) {
-    return (
-      <Badge className="bg-red-100 text-red-800 hover:bg-red-200 border-none px-2 py-0.5 rounded-full">
-        <AlertTriangle className="h-3 w-3 mr-1" />Pilne ({daysLeft} dni)
-      </Badge>
-    );
+function groupEntriesByPermit(entries: PermitExamEntry[]): PermitExamGroup[] {
+  const byPermit = new Map<string, PermitExamGroup>();
+
+  for (const entry of entries) {
+    const existing = byPermit.get(entry.permitId);
+    if (existing) {
+      existing.exams.push(entry);
+      continue;
+    }
+    byPermit.set(entry.permitId, {
+      permitId: entry.permitId,
+      permitNumber: entry.permitNumber,
+      permitTypeName: entry.permitTypeName,
+      exams: [entry],
+    });
   }
-  return (
-    <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none px-2 py-0.5 rounded-full">
-      <AlertTriangle className="h-3 w-3 mr-1" />{daysLeft} dni
-    </Badge>
-  );
+
+  const examOrder = (type: ExamType) => (type === "medical" ? 0 : 1);
+
+  return Array.from(byPermit.values())
+    .map((group) => ({
+      ...group,
+      exams: [...group.exams].sort((a, b) => examOrder(a.examType) - examOrder(b.examType)),
+    }))
+    .sort((a, b) => {
+      const earliest = (exams: PermitExamEntry[]) =>
+        Math.min(...exams.map((e) => (e.expiryDate ? new Date(e.expiryDate).getTime() : Number.POSITIVE_INFINITY)));
+      return earliest(a.exams) - earliest(b.exams);
+    });
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("pl-PL", { day: "numeric", month: "short", year: "numeric" });
+function worstGroupStatus(exams: PermitExamEntry[]): ExamStatus {
+  if (exams.some((e) => e.status === "expired")) return "expired";
+  if (exams.some((e) => e.status === "missing")) return "missing";
+  if (exams.some((e) => e.status === "expiring")) return "expiring";
+  return "current";
+}
+
+function statusBadge(entry: PermitExamEntry) {
+  if (entry.status === "missing") {
+    return <Badge className="bg-slate-100 text-slate-800 border-none rounded-full">Brak danych</Badge>;
+  }
+  if (entry.status === "expired") {
+    return <Badge variant="destructive" className="rounded-full">Wygasło</Badge>;
+  }
+  if (entry.status === "expiring") {
+    if (entry.daysLeft != null && entry.daysLeft <= 7) {
+      return <Badge className="bg-red-100 text-red-800 border-none rounded-full">Pilne ({entry.daysLeft} dni)</Badge>;
+    }
+    return <Badge className="bg-amber-100 text-amber-800 border-none rounded-full">Wygasa</Badge>;
+  }
+  return <Badge className="bg-emerald-100 text-emerald-800 border-none rounded-full">Aktualne</Badge>;
 }
 
 export function MedicalAlertsView() {
   const navigate = useNavigate();
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [alerts, setAlerts] = useState<CitizenMedicalAlertDto[]>([]);
   const [permits, setPermits] = useState<PermitDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("expiring");
+  const [activeTab, setActiveTab] = useState("all");
 
   useEffect(() => {
-    citizenService
-      .getPermits()
-      .then((r) => {
-        setPermits(r);
-        setAlerts(computeAlerts(r));
+    Promise.all([citizenService.getMedicalAlerts(), citizenService.getPermits()])
+      .then(([alertsRes, permitsRes]) => {
+        setAlerts(alertsRes);
+        setPermits(permitsRes);
       })
-      .catch(() => {})
+      .catch(() => {
+        setAlerts([]);
+        setPermits([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  const expiringAlerts = alerts.filter((a) => a.daysUntilExpiry > 0);
-  const expiredAlerts = alerts.filter((a) => a.daysUntilExpiry <= 0);
-  const hasPermits = permits.length > 0;
+  const examEntries = useMemo(() => mapPermitExamEntries(permits, alerts), [permits, alerts]);
+  const attentionEntries = examEntries.filter((entry) => entry.status === "expiring" || entry.status === "expired");
+  const missingEntries = examEntries.filter((entry) => entry.status === "missing");
+  const allGroups = useMemo(() => groupEntriesByPermit(examEntries), [examEntries]);
+  const attentionGroups = useMemo(() => groupEntriesByPermit(attentionEntries), [attentionEntries]);
+  const missingGroups = useMemo(() => groupEntriesByPermit(missingEntries), [missingEntries]);
+  const activePermits = permits.filter((permit) => permit.statusName === "Active");
 
-  const AlertCard = ({ alert, expired }: { alert: AlertItem; expired?: boolean }) => (
-    <Card className={`rounded-2xl border-none shadow-sm ${expired ? "border-red-200 bg-red-50/30" : ""}`}>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <div className={`p-2 rounded-xl shrink-0 mt-1 ${expired ? "bg-red-100" : "bg-amber-100"}`}>
-            {expired
-              ? <XCircle className="h-5 w-5 text-red-600" />
-              : <AlertTriangle className="h-5 w-5 text-orange-500" />}
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className={`font-semibold text-base ${expired ? "text-red-900" : ""}`}>
-                {getAlertTypeLabel(alert.alertType)}
-              </h3>
-              {getAlertBadge(alert.daysUntilExpiry)}
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className={`block ${expired ? "text-red-600/70" : "text-muted-foreground"}`}>Nr pozwolenia:</span>
-                <span className={`font-mono ${expired ? "text-red-900" : "text-foreground"}`}>{alert.permitNumber}</span>
-              </div>
-              <div className="col-span-2">
-                <span className={`block ${expired ? "text-red-600/70" : "text-muted-foreground"}`}>
-                  {alert.daysUntilExpiry <= 0 ? "Wygasło:" : "Wygasa:"}
-                </span>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <Calendar className={`h-3 w-3 ${expired ? "text-red-600" : "text-muted-foreground"}`} />
-                  <span className={`font-medium ${expired ? "text-red-900" : "text-foreground"}`}>
-                    {formatDate(alert.expiryDate)}
-                    {alert.daysUntilExpiry < 0 && ` (${Math.abs(alert.daysUntilExpiry)} dni temu)`}
-                  </span>
-                </div>
-              </div>
-            </div>
+  const ExamRow = ({ entry }: { entry: PermitExamEntry }) => {
+    const showWarningBlock = entry.status === "expired" || entry.status === "missing";
+    const Icon = examIcon(entry.examType);
 
-            {expired && (
-              <div className="mt-3 bg-red-100 rounded-lg p-2">
-                <p className="text-xs text-red-900">
-                  <strong>Wymagane działanie:</strong> Odnów badanie i dostarcz zaświadczenie do WPA, aby odblokować pozwolenie.
-                </p>
-              </div>
-            )}
-          </div>
+    return (
+      <div className="flex gap-3 py-3 first:pt-0 last:pb-0">
+        <CitizenNavIconTile className="scale-90 origin-top-left [&_svg]:h-5 [&_svg]:w-5 p-2.5">
+          <Icon />
+        </CitizenNavIconTile>
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold text-sm leading-snug text-foreground">{examLabel(entry.examType)}</h4>
+
+          <DateStatusMeta className="mt-1" emphasizeDate statusBadge={statusBadge(entry)}>
+            {entry.expiryDate
+              ? `${entry.status === "expired" ? "Wygasło" : "Ważne do"}: ${formatMedicalAlertDate(entry.expiryDate)}`
+              : "Ważne do: brak danych"}
+            {entry.daysLeft != null && entry.daysLeft < 0 && ` (${Math.abs(entry.daysLeft)} dni temu)`}
+          </DateStatusMeta>
+
+          {entry.alertMessage && (
+            <p className="text-xs text-muted-foreground leading-relaxed mt-2">{entry.alertMessage}</p>
+          )}
+
+          {showWarningBlock && (
+            <div
+              className={cn(
+                "rounded-lg p-2 mt-2",
+                entry.status === "expired" ? "bg-red-100" : "bg-slate-100",
+              )}
+            >
+              <p className={cn("text-xs", entry.status === "expired" ? "text-red-900" : "text-slate-800")}>
+                <strong>Wymagane działanie:</strong>{" "}
+                {entry.status === "missing"
+                  ? "Brakuje potwierdzonej daty ważności badania. Skontaktuj się z WPA w celu aktualizacji."
+                  : "Odnów badanie i dostarcz zaświadczenie do WPA, aby odblokować pozwolenie."}
+              </p>
+            </div>
+          )}
         </div>
-      </CardContent>
-    </Card>
-  );
+      </div>
+    );
+  };
+
+  const PermitExamGroupCard = ({ group }: { group: PermitExamGroup }) => {
+    const permitType = PERMIT_TYPE_LABELS[group.permitTypeName] ?? group.permitTypeName;
+    const tone = worstGroupStatus(group.exams);
+
+    return (
+      <Card
+        className={cn(
+          "rounded-2xl border-none shadow-sm gap-0 overflow-hidden",
+          tone === "expired" && "bg-red-50/40",
+          tone === "missing" && "bg-slate-50",
+          tone === "current" && "bg-card",
+          tone === "expiring" && "bg-card",
+        )}
+      >
+        <CardContent className={CITIZEN_LIST_CARD_CONTENT_CLASS}>
+          <button
+            type="button"
+            className={cn(
+              "flex w-full items-center gap-3 text-left rounded-xl -m-1 p-1 transition-colors",
+              "hover:bg-muted/30 active:scale-[0.99]",
+            )}
+            onClick={() => navigate(`/permits/${group.permitId}`)}
+          >
+            <CitizenNavIconTile>
+              <Shield />
+            </CitizenNavIconTile>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground">Pozwolenie</p>
+              <h3 className="font-semibold text-sm leading-snug text-foreground font-mono">{group.permitNumber}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">{permitType}</p>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground self-center" aria-hidden />
+          </button>
+
+          <div className="mt-3 pt-3 border-t border-border/80 divide-y divide-border/80">
+            {group.exams.map((entry) => (
+              <ExamRow key={entry.id} entry={entry} />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderGroups = (groups: PermitExamGroup[]) =>
+    groups.map((group) => <PermitExamGroupCard key={group.permitId} group={group} />);
 
   if (loading) {
     return (
@@ -174,7 +306,9 @@ export function MedicalAlertsView() {
           <div className="h-8 w-40 bg-muted animate-pulse rounded-lg mb-2" />
           <div className="h-4 w-64 bg-muted animate-pulse rounded" />
         </div>
-        {[1, 2].map((i) => <div key={i} className="h-28 rounded-2xl bg-muted animate-pulse" />)}
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-28 rounded-2xl bg-muted animate-pulse" />
+        ))}
       </div>
     );
   }
@@ -182,82 +316,91 @@ export function MedicalAlertsView() {
   return (
     <div className="pt-2">
       <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Alerty medyczne</h1>
-        <p className="text-muted-foreground">Wygasające i wygasłe badania lekarskie na Twoich pozwoleniach</p>
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-1">Badania medyczne</h1>
+        <p className="text-muted-foreground">
+          Wszystkie badania lekarskie i psychologiczne powiązane z aktywnymi pozwoleniami
+        </p>
       </div>
 
-      {alerts.length === 0 ? (
+      {activePermits.length === 0 ? (
         <Card className="rounded-2xl border-none shadow-sm">
           <CardContent className="p-12 text-center">
-            {hasPermits ? (
-              <>
-                <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-30 text-emerald-600" />
-                <p className="text-foreground font-semibold mb-1">Wszystko w porządku</p>
-                <p className="text-muted-foreground text-sm">
-                  Twoje badania są aktualne. Nowe daty po odnowieniu zaświadczeń wpisuje WPA.
-                </p>
-                <Button variant="outline" className="mt-4 rounded-xl" onClick={() => navigate("/weapons")}>
-                  <Shield className="h-4 w-4 mr-2" />Moje pozwolenia
-                </Button>
-              </>
-            ) : (
-              <>
-                <FileText className="h-16 w-16 mx-auto mb-4 opacity-30 text-primary" />
-                <p className="text-foreground font-semibold mb-1">Brak badań w systemie</p>
-                <p className="text-muted-foreground text-sm">
-                  Jako citizen dodajesz daty badań podczas składania wniosku o pozwolenie. Po wydaniu pozwolenia będą widoczne tutaj.
-                </p>
-                <Button className="mt-4 rounded-xl" onClick={() => navigate("/application/new")}>
-                  Nowy wniosek
-                </Button>
-              </>
-            )}
+            <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-30 text-emerald-600" />
+            <p className="text-foreground font-semibold mb-1">Brak aktywnych pozwoleń</p>
+            <p className="text-muted-foreground text-sm">
+              Gdy pozwolenie zostanie aktywowane, badania pojawią się automatycznie w tym widoku.
+            </p>
+            <Button variant="outline" className="mt-4 rounded-xl" onClick={() => navigate("/weapons")}>
+              <Shield className="h-4 w-4 mr-2" />
+              Moje pozwolenia
+            </Button>
           </CardContent>
         </Card>
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-muted/50 p-1">
-            <TabsTrigger value="expiring" className="rounded-xl">
-              Wygasające
-              {expiringAlerts.length > 0 && (
+          <AppTabsList className="grid grid-cols-3">
+            <TabsTrigger value="all" className="rounded-xl">
+              Wszystkie
+              {allGroups.length > 0 && (
+                <Badge className="ml-2 bg-slate-500 hover:bg-slate-600 px-1.5 py-0 text-xs h-5 min-w-5">
+                  {allGroups.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="attention" className="rounded-xl">
+              Do uwagi
+              {attentionEntries.length > 0 && (
                 <Badge className="ml-2 bg-amber-500 hover:bg-amber-600 px-1.5 py-0 text-xs h-5 min-w-5">
-                  {expiringAlerts.length}
+                  {attentionEntries.length}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="expired" className="rounded-xl">
-              Wygasłe
-              {expiredAlerts.length > 0 && (
-                <Badge className="ml-2 bg-red-500 hover:bg-red-600 px-1.5 py-0 text-xs h-5 min-w-5">
-                  {expiredAlerts.length}
+            <TabsTrigger value="missing" className="rounded-xl">
+              Braki
+              {missingGroups.length > 0 && (
+                <Badge className="ml-2 bg-slate-500 hover:bg-slate-600 px-1.5 py-0 text-xs h-5 min-w-5">
+                  {missingGroups.length}
                 </Badge>
               )}
             </TabsTrigger>
-          </TabsList>
+          </AppTabsList>
 
-          <TabsContent value="expiring" className="space-y-3">
-            {expiringAlerts.length === 0 ? (
+          <TabsContent value="all" className="space-y-3">
+            {allGroups.length === 0 ? (
               <Card className="rounded-2xl border-none shadow-sm">
                 <CardContent className="p-12 text-center">
                   <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-30 text-emerald-600" />
-                  <p className="text-muted-foreground">Brak wygasających badań</p>
+                  <p className="text-muted-foreground">Brak danych o badaniach dla aktywnych pozwoleń</p>
                 </CardContent>
               </Card>
             ) : (
-              expiringAlerts.map((a) => <AlertCard key={a.id} alert={a} />)
+              renderGroups(allGroups)
             )}
           </TabsContent>
 
-          <TabsContent value="expired" className="space-y-3">
-            {expiredAlerts.length === 0 ? (
+          <TabsContent value="attention" className="space-y-3">
+            {attentionGroups.length === 0 ? (
               <Card className="rounded-2xl border-none shadow-sm">
                 <CardContent className="p-12 text-center">
                   <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-30 text-emerald-600" />
-                  <p className="text-muted-foreground">Brak wygasłych badań</p>
+                  <p className="text-muted-foreground">Brak badań wymagających uwagi</p>
                 </CardContent>
               </Card>
             ) : (
-              expiredAlerts.map((a) => <AlertCard key={a.id} alert={a} expired />)
+              renderGroups(attentionGroups)
+            )}
+          </TabsContent>
+
+          <TabsContent value="missing" className="space-y-3">
+            {missingGroups.length === 0 ? (
+              <Card className="rounded-2xl border-none shadow-sm">
+                <CardContent className="p-12 text-center">
+                  <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-30 text-emerald-600" />
+                  <p className="text-muted-foreground">Brak nieuzupełnionych danych badań</p>
+                </CardContent>
+              </Card>
+            ) : (
+              renderGroups(missingGroups)
             )}
           </TabsContent>
         </Tabs>

@@ -3,22 +3,26 @@ import { useNavigate } from "react-router";
 import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { FileText, Shield, AlertCircle, ChevronRight, Crosshair, QrCode, ArrowRightLeft, Clock, CreditCard } from "lucide-react";
+import { Shield, AlertCircle, Crosshair, QrCode, ArrowRightLeft, Clock, ChevronRight, FileText } from "lucide-react";
+import { CitizenApplicationCard } from "../components/citizen/CitizenApplicationCard";
+import { cn } from "../components/ui/utils";
+import { DateStatusMeta } from "../components/DateStatusMeta";
 import { citizenService } from "../../services/citizenService";
 import type { CitizenProfileDto, PermitDto, PermitApplicationDto, PromiseApplicationDto } from "../../types/api";
+import { getApplicationStatusMeta } from "../../lib/statusUi";
+import { CITIZEN_NAV_ICON_TONE } from "../utils/citizenCardUi";
 
 type RecentEntry =
   | { kind: "permit"; data: PermitApplicationDto }
   | { kind: "promise"; data: PromiseApplicationDto };
 
-const STATUS_BADGE: Record<string, JSX.Element> = {
-  Submitted: <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none px-2 py-0.5 rounded-full">Złożony</Badge>,
-  Paid: <Badge variant="secondary" className="bg-cyan-100 text-cyan-800 hover:bg-cyan-200 border-none px-2 py-0.5 rounded-full">Opłacony</Badge>,
-  UnderReview: <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none px-2 py-0.5 rounded-full">W weryfikacji</Badge>,
-  Approved: <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none px-2 py-0.5 rounded-full">Zaakceptowany</Badge>,
-  Rejected: <Badge variant="destructive" className="rounded-full px-2 py-0.5">Odrzucony</Badge>,
-  RequiresCorrection: <Badge variant="secondary" className="bg-orange-100 text-orange-800 hover:bg-orange-200 border-none px-2 py-0.5 rounded-full">Wymaga uzupełnienia</Badge>,
-};
+function renderStatusBadge(status: string) {
+  const meta = getApplicationStatusMeta(status);
+  if (!meta) {
+    return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
+  }
+  return <Badge variant={meta.variant} className={meta.badgeClassName}>{meta.label}</Badge>;
+}
 
 function getPermitTypeLabel(app: PermitApplicationDto) {
   const typeName = app.requestedPermitTypeName || String(app.requestedPermitType);
@@ -97,7 +101,7 @@ export function CitizenDashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-6 pt-2">
+      <div className="space-y-6 pt-2 max-md:pb-2">
         <div className="px-1">
           <div className="h-8 w-48 bg-muted animate-pulse rounded-lg mb-2" />
           <div className="h-4 w-64 bg-muted animate-pulse rounded" />
@@ -108,10 +112,10 @@ export function CitizenDashboard() {
   }
 
   return (
-    <div className="space-y-6 pt-2">
+    <div className="space-y-6 pt-2 max-md:pb-2">
       {/* Header */}
       <div className="px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
           Cześć, {profile?.firstName ?? ""}
         </h1>
         <p className="text-muted-foreground mt-1">Twój panel zarządzania bronią</p>
@@ -199,7 +203,7 @@ export function CitizenDashboard() {
           </div>
           <div className="relative z-10 flex items-start justify-between gap-4">
             <div className="flex items-start gap-3 min-w-0">
-              <div className="bg-blue-100 text-blue-700 p-3 rounded-2xl shrink-0">
+              <div className={cn("p-3 rounded-2xl shrink-0", CITIZEN_NAV_ICON_TONE)}>
                 {activePermitApplication.statusName === "RequiresCorrection" ? (
                   <AlertCircle className="h-6 w-6" />
                 ) : (
@@ -213,14 +217,9 @@ export function CitizenDashboard() {
                 <h2 className="text-lg font-bold text-foreground truncate">
                   {getPermitTypeLabel(activePermitApplication)}
                 </h2>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {STATUS_BADGE[activePermitApplication.statusName] ?? (
-                    <Badge className="rounded-full px-2 py-0.5">{activePermitApplication.statusName}</Badge>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    Złożono {formatDate(activePermitApplication.createdAt)}
-                  </span>
-                </div>
+                <DateStatusMeta className="mt-2" statusBadge={renderStatusBadge(activePermitApplication.statusName)}>
+                  {formatDate(activePermitApplication.createdAt)}
+                </DateStatusMeta>
                 <p className="text-sm text-muted-foreground mt-3 leading-snug">
                   {activePermitApplication.statusName === "RequiresCorrection"
                     ? "WPA poprosiło o uzupełnienie danych. Kliknij, żeby poprawić wniosek."
@@ -240,7 +239,7 @@ export function CitizenDashboard() {
             <Shield className="h-28 w-28" />
           </div>
           <div className="relative z-10 flex flex-col items-center justify-center min-h-[140px] gap-3">
-            <div className="bg-blue-50 text-primary p-3 rounded-2xl">
+            <div className={cn("p-3 rounded-2xl", CITIZEN_NAV_ICON_TONE)}>
               <Shield className="h-8 w-8" />
             </div>
             <p className="text-sm font-medium text-foreground">Brak aktywnego pozwolenia</p>
@@ -293,7 +292,7 @@ export function CitizenDashboard() {
               onClick={() => navigate(path)}
             >
               <CardContent className="p-4 flex flex-col items-center justify-center text-center gap-2 h-[100px]">
-                <div className="bg-blue-50 p-3 rounded-full text-primary mb-1">
+                <div className={cn("p-3 rounded-2xl mb-1", CITIZEN_NAV_ICON_TONE)}>
                   <Icon className="h-6 w-6" />
                 </div>
                 <span className="text-xs font-semibold leading-tight">{label}</span>
@@ -306,9 +305,13 @@ export function CitizenDashboard() {
       {/* Recent Permit Applications */}
       {recentApps.length > 0 && (
         <div>
-          <div className="flex justify-between items-end mb-3 px-1">
-            <h3 className="text-lg font-bold text-foreground">Ostatnie wnioski</h3>
-            <Button variant="link" className="text-primary text-sm h-auto p-0 font-medium" onClick={() => navigate("/applications")}>
+          <div className="flex justify-between items-baseline gap-3 mb-3 px-1">
+            <h3 className="text-lg font-bold text-foreground leading-tight">Ostatnie wnioski</h3>
+            <Button
+              variant="link"
+              className="text-primary text-sm h-auto min-h-0 px-0 py-0 font-medium shrink-0"
+              onClick={() => navigate("/applications")}
+            >
               Wszystkie
             </Button>
           </div>
@@ -319,29 +322,15 @@ export function CitizenDashboard() {
               const title = isPermit
                 ? `Wniosek o pozwolenie — ${getPermitTypeLabel(entry.data)}`
                 : `Wniosek o e-Promesę — ${entry.data.requestedWeaponType}`;
-              const Icon = isPermit ? FileText : CreditCard;
               return (
-                <Card
+                <CitizenApplicationCard
                   key={entry.data.id}
-                  className="rounded-2xl border-none shadow-sm hover:bg-muted/30 transition-colors cursor-pointer active:scale-[0.99]"
+                  variant={isPermit ? "permit" : "promise"}
+                  title={title}
+                  date={formatDate(entry.data.createdAt)}
+                  statusBadge={renderStatusBadge(entry.data.statusName)}
                   onClick={() => navigate("/applications")}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-2xl ${isPermit ? "bg-muted text-muted-foreground" : "bg-blue-50 text-primary"}`}>
-                        <Icon className="h-6 w-6" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-sm truncate text-foreground">{title}</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">{formatDate(entry.data.createdAt)}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        {STATUS_BADGE[entry.data.statusName] ?? <Badge className="rounded-full px-2 py-0.5">{entry.data.statusName}</Badge>}
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                />
               );
             })}
           </div>
