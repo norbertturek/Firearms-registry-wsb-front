@@ -154,7 +154,7 @@ export function OfficerDashboard() {
             title="Wyszukiwarka"
             description="Szukaj obywateli i broni w rejestrze"
             icon={Search}
-            onClick={() => navigate("/wpa/search")}
+            onClick={() => navigate("/officer/search")}
           />
           <WpaQuickToolCard
             title="Wszystkie wnioski"
@@ -169,7 +169,13 @@ export function OfficerDashboard() {
         <AppTabsList className="grid grid-cols-3">
           <AppTabTrigger value="permits" label="Pozwolenia" icon={Shield} count={pendingPermits.length} />
           <AppTabTrigger value="promises" label="Promesy" icon={CreditCard} count={pendingPromises.length} />
-          <AppTabTrigger value="alerts" label="Alerty medyczne" icon={AlertTriangle} count={alerts.length} />
+          <AppTabTrigger
+            value="alerts"
+            label="Alerty"
+            ariaLabel="Alerty medyczne"
+            icon={AlertTriangle}
+            count={alerts.length}
+          />
         </AppTabsList>
 
         <TabsContent value="permits" className="mt-0 space-y-3">
@@ -249,7 +255,7 @@ export function OfficerDashboard() {
                       <Button
                         variant="outline"
                         className="min-h-[44px] rounded-xl text-sm flex-1 sm:flex-none"
-                        onClick={() => navigate(`/wpa/citizens/${alert.citizenId}`)}
+                        onClick={() => navigate(`/officer/citizens/${alert.citizenId}`)}
                       >
                         <User className="h-4 w-4 mr-2" aria-hidden />
                         Profil
@@ -258,7 +264,7 @@ export function OfficerDashboard() {
                         <Button
                           variant="outline"
                           className="min-h-[44px] rounded-xl text-sm flex-1 sm:flex-none"
-                          onClick={() => navigate(`/wpa/citizens/${alert.citizenId}?permitId=${alert.permitId}`)}
+                          onClick={() => navigate(`/officer/citizens/${alert.citizenId}?permitId=${alert.permitId}`)}
                         >
                           <CalendarCheck className="h-4 w-4 mr-2" aria-hidden />
                           Aktualizuj badania

@@ -95,7 +95,7 @@ export function PermitApplicationAttachmentsCard({
           onOpenChange={(open) => !open && setPreviewAttachment(null)}
           fileName={previewAttachment.fileName}
           contentType={previewAttachment.contentType}
-          viewUrl={`/wpa/attachments/${applicationId}/${previewAttachment.id}?name=${encodeURIComponent(previewAttachment.fileName)}`}
+          viewUrl={`/officer/attachments/${applicationId}/${previewAttachment.id}?name=${encodeURIComponent(previewAttachment.fileName)}`}
           fetchBlob={() =>
             wpaService.downloadPermitApplicationAttachment(applicationId, previewAttachment.id)
           }

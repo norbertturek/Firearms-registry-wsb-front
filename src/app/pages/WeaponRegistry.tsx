@@ -56,7 +56,7 @@ export function WeaponRegistry() {
 
   useEffect(() => {
     if (isOfficer) {
-      navigate("/wpa/search?tab=firearms", { replace: true });
+      navigate("/officer/search?tab=firearms", { replace: true });
     }
   }, [isOfficer, navigate]);
 

@@ -338,6 +338,7 @@ export interface WpaCitizenDto {
   weaponBookNumber: string;
   createdAt: string;
   permits: PermitDto[];
+  firearms?: WpaFirearmSearchResult[];
   totalFirearms: number;
   activeAlerts: number;
 }

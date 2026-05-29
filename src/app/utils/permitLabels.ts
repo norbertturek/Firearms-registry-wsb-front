@@ -8,6 +8,10 @@ export const PERMIT_TYPE_LABELS: Record<string, string> = {
   Other: "Inne",
 };
 
+export function getPermitTypeLabel(type: string) {
+  return PERMIT_TYPE_LABELS[type] ?? type;
+}
+
 const PERMIT_TYPE_LABELS_BY_VALUE: Record<number, string> = {
   0: "Sportowe",
   1: "Kolekcjonerskie",
@@ -58,6 +62,17 @@ export function getPermitApplicationTypeLabel(app: PermitApplicationTypeFields) 
   }
 
   return "Nieznane";
+}
+
+export function formatPermitCount(count: number) {
+  if (count === 0) return "0 pozwoleń";
+  if (count === 1) return "1 pozwolenie";
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return `${count} pozwolenia`;
+  }
+  return `${count} pozwoleń`;
 }
 
 export function getPermitDisplayTypeLabel(permit: PermitDto) {

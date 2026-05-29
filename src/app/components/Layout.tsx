@@ -35,8 +35,8 @@ export function Layout() {
     if (itemPath === "/application/new") {
       return path === "/application/new";
     }
-    if (itemPath === "/wpa/search") {
-      return path === "/wpa/search";
+    if (itemPath === "/officer/search") {
+      return path === "/officer/search" || path.startsWith("/officer/citizens/");
     }
     return path === itemPath;
   };
@@ -62,7 +62,7 @@ export function Layout() {
         return [
           { label: "Pulpit", path: "/officer", icon: Home },
           { label: "Zadania", path: "/applications", icon: CheckSquare },
-          { label: "Rejestr", path: "/wpa/search", icon: Shield },
+          { label: "Rejestr", path: "/officer/search", icon: Shield },
         ];
       case "shop":
         return [

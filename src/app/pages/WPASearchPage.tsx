@@ -18,7 +18,9 @@ import { formatActiveMedicalAlertCount } from "../../lib/medicalAlerts";
 import { User, Shield, ChevronRight, AlertTriangle, ChevronLeft } from "lucide-react";
 import { ApplicationListTile } from "../components/wpa/ApplicationListTile";
 import { WpaListSectionHeader } from "../components/wpa/WpaListSectionHeader";
-import { PERMIT_TYPE_LABELS } from "../utils/permitLabels";
+import { WpaFirearmSearchCard } from "../components/wpa/WpaFirearmSearchCard";
+import { formatPermitCount } from "../utils/permitLabels";
+import { getFirearmCategoryBadge } from "../utils/firearmUi";
 
 const PAGE_SIZE = 20;
 
@@ -36,24 +38,6 @@ const PERMIT_TYPE_OPTIONS: { value: PermitType; label: string }[] = [
 
 function getStatusBadge(status: string) {
   return <StatusBadge meta={getFirearmStatusMeta(status)} />;
-}
-
-function getPermitTypeLabel(type: string) {
-  return PERMIT_TYPE_LABELS[type] ?? type;
-}
-
-function getCategoryBadge(category: string) {
-  const config: Record<string, { label: string; color: string }> = {
-    A: { label: "Kat. A", color: "bg-red-100 text-red-800" },
-    B: { label: "Kat. B", color: "bg-blue-100 text-blue-800" },
-    C: { label: "Kat. C", color: "bg-green-100 text-green-800" },
-  };
-  const c = config[category] ?? { label: `Kat. ${category}`, color: "bg-muted text-muted-foreground" };
-  return (
-    <Badge className={`${c.color} hover:${c.color} border-none px-2 py-0.5 rounded-full text-xs`}>
-      {c.label}
-    </Badge>
-  );
 }
 
 function formatDate(s: string) {
@@ -170,6 +154,7 @@ export function WPASearchPage() {
   const [firearmsTotalCount, setFirearmsTotalCount] = useState(0);
   const [firearmsTotalPages, setFirearmsTotalPages] = useState(0);
   const [firearmsSearched, setFirearmsSearched] = useState(false);
+  const [expandedFirearmId, setExpandedFirearmId] = useState<string | null>(null);
 
   useEffect(() => {
     setCitizensPage(1);
@@ -366,18 +351,14 @@ export function WPASearchPage() {
                             {formatActiveMedicalAlertCount(citizen.activeAlerts)}
                           </Badge>
                         )}
-                        {citizen.permits.map((permit) => (
-                          <Badge
-                            key={permit.id}
-                            variant="secondary"
-                            className="rounded-full px-2 py-0.5 text-[10px] md:text-xs"
-                          >
-                            {getPermitTypeLabel(permit.permitTypeName)}
+                        {citizen.permits.length > 0 && (
+                          <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px] md:text-xs">
+                            {formatPermitCount(citizen.permits.length)}
                           </Badge>
-                        ))}
+                        )}
                       </div>
                     }
-                    onClick={() => navigate(`/wpa/citizens/${citizen.id}`)}
+                    onClick={() => navigate(`/officer/citizens/${citizen.id}`)}
                   />
                 ))}
               </div>
@@ -417,25 +398,16 @@ export function WPASearchPage() {
             <>
               <div className="space-y-3">
                 {firearms.map((f) => (
-                  <ApplicationListTile
+                  <WpaFirearmSearchCard
                     key={f.id}
-                    icon={<Shield />}
-                    title={`${f.brand} ${f.model}`}
-                    lines={[
-                      `Właściciel: ${f.ownerName}`,
-                      `PESEL: ${f.ownerPesel}`,
-                      `Nr seryjny: ${f.serialNumber} · ${f.caliber}`,
-                      `Pozwolenie: ${f.permitNumber} · Rejestracja: ${formatDate(f.registeredAt)}`,
-                    ]}
-                    statusBadge={
-                      <div className="flex flex-wrap gap-1.5">
-                        {getStatusBadge(f.status)}
-                        {getCategoryBadge(f.category)}
-                        <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px] md:text-xs">
-                          {getPermitTypeLabel(f.permitType)}
-                        </Badge>
-                      </div>
+                    firearm={f}
+                    expanded={expandedFirearmId === f.id}
+                    onToggle={() =>
+                      setExpandedFirearmId((current) => (current === f.id ? null : f.id))
                     }
+                    statusBadge={getStatusBadge(f.status)}
+                    categoryBadge={getFirearmCategoryBadge(f.category)}
+                    formatDate={formatDate}
                   />
                 ))}
               </div>

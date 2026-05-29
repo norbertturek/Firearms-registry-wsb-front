@@ -21,13 +21,18 @@ import { MedicalAlertsView } from "./pages/MedicalAlertsView";
 import { WPASearchPage } from "./pages/WPASearchPage";
 import { CitizenDetailsWPA } from "./pages/CitizenDetailsWPA";
 import { PermitDetails } from "./pages/PermitDetails";
-import { ApplicationCorrection } from "./pages/ApplicationCorrection";
 import { WpaAttachmentViewPage } from "./pages/WpaAttachmentViewPage";
+import { ApplicationCorrection } from "./pages/ApplicationCorrection";
+import { LegacyOfficerAttachmentRedirect, LegacyOfficerCitizenRedirect } from "./components/officer/LegacyOfficerRedirects";
 
 export const router = createBrowserRouter([
   {
-    path: "/wpa/attachments/:applicationId/:attachmentId",
+    path: "/officer/attachments/:applicationId/:attachmentId",
     Component: WpaAttachmentViewPage,
+  },
+  {
+    path: "/wpa/attachments/:applicationId/:attachmentId",
+    Component: LegacyOfficerAttachmentRedirect,
   },
   {
     path: "/",
@@ -67,9 +72,13 @@ export const router = createBrowserRouter([
       { path: "weapons", Component: WeaponRegistry },
       { path: "decision/:id", Component: DecisionPage },
 
-      // WPA Officer routes
-      { path: "wpa/search", Component: WPASearchPage },
-      { path: "wpa/citizens/:id", Component: CitizenDetailsWPA },
+      // Officer registry routes
+      { path: "officer/search", Component: WPASearchPage },
+      { path: "officer/citizens/:id", Component: CitizenDetailsWPA },
+
+      // Legacy WPA frontend URLs
+      { path: "wpa/search", Component: () => <RedirectTo to="/officer/search" /> },
+      { path: "wpa/citizens/:id", Component: LegacyOfficerCitizenRedirect },
 
       { path: "*", Component: NotFound },
     ],

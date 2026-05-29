@@ -10,6 +10,41 @@ function qp(url: URL, key: string, fallback: number) {
   return v !== null ? Number(v) : fallback;
 }
 
+function getCitizenById(citizenId: string) {
+  return db.wpaCitizens.find((c) => c.id === citizenId);
+}
+
+function getPermitForFirearm(firearm: { citizenId?: string }) {
+  const citizenId = firearm.citizenId ?? db.IDS.citizenProfile;
+  return db.permits.find((p) => p.citizenId === citizenId);
+}
+
+function mapFirearmToSearchResult(firearm: (typeof db.firearms)[number]) {
+  const citizenId = firearm.citizenId ?? db.IDS.citizenProfile;
+  const citizen = getCitizenById(citizenId);
+  const permit = getPermitForFirearm(firearm);
+  return {
+    id: firearm.id,
+    brand: firearm.brand,
+    model: firearm.model,
+    category: firearm.category,
+    caliber: firearm.caliber,
+    serialNumber: firearm.serialNumber,
+    status: firearm.status,
+    ownerName: citizen ? `${citizen.firstName} ${citizen.lastName}` : 'Jan Kowalski',
+    ownerPesel: citizen?.pesel ?? '90010112345',
+    permitNumber: permit?.permitNumber ?? '—',
+    permitType: permit?.permitType ?? 'Sport',
+    registeredAt: firearm.registeredAt,
+  };
+}
+
+function getCitizenFirearms(citizenId: string) {
+  return db.firearms
+    .filter((f) => (f.citizenId ?? db.IDS.citizenProfile) === citizenId)
+    .map(mapFirearmToSearchResult);
+}
+
 function buildWpaCitizenDetail(id: string) {
   const citizen = db.wpaCitizens.find((c) => c.id === id);
   if (!citizen) return null;
@@ -45,12 +80,13 @@ function buildWpaCitizenDetail(id: string) {
     db.medicalAlerts.filter((a) => a.citizenId === id && !a.isResolved).length,
   );
 
-  const totalFirearms =
-    id === db.IDS.citizenProfile ? db.firearms.length : (citizen.totalFirearms ?? 0);
+  const firearms = getCitizenFirearms(id);
+  const totalFirearms = firearms.length;
 
   return {
     ...citizen,
     permits,
+    firearms,
     totalFirearms,
     activeAlerts,
   };
@@ -240,6 +276,7 @@ export const wpaHandlers = [
         c.activeAlerts ?? 0,
         db.medicalAlerts.filter((a) => a.citizenId === c.id && !a.isResolved).length,
       ),
+      totalFirearms: getCitizenFirearms(c.id).length,
     }));
 
     if (q) {
@@ -287,20 +324,7 @@ export const wpaHandlers = [
     const permitNumber = url.searchParams.get('permitNumber')?.toLowerCase() ?? '';
 
     const results = db.firearms
-      .map((f) => ({
-        id: f.id,
-        brand: f.brand,
-        model: f.model,
-        category: f.category,
-        caliber: f.caliber,
-        serialNumber: f.serialNumber,
-        status: f.status,
-        ownerName: 'Jan Kowalski',
-        ownerPesel: '90010112345',
-        permitNumber: 'POZW-20240501-DEMO0001',
-        permitType: 'Sport',
-        registeredAt: f.registeredAt,
-      }))
+      .map(mapFirearmToSearchResult)
       .filter((f) => {
         if (serialNumber && !f.serialNumber.toLowerCase().includes(serialNumber)) return false;
         if (pesel && !f.ownerPesel.includes(pesel)) return false;
@@ -316,9 +340,9 @@ export const wpaHandlers = [
     db.syncMedicalAlertsFromPermits();
     const url = new URL(request.url);
     const resolvedFilter = url.searchParams.get('resolved');
-    const items = db.medicalAlerts
-      .map((a) => ({ ...a, citizenId: db.IDS.citizenProfile, citizenName: 'Jan Kowalski', citizenPesel: '90010*****' }))
-      .filter((a) => resolvedFilter === null || a.isResolved === (resolvedFilter === 'true'));
+    const items = db.medicalAlerts.filter(
+      (a) => resolvedFilter === null || a.isResolved === (resolvedFilter === 'true'),
+    );
     return HttpResponse.json(db.paginate(items, qp(url, 'page', 1), qp(url, 'pageSize', 20)));
   }),
 

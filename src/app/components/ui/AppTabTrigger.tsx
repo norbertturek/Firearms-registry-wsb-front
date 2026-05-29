@@ -16,6 +16,7 @@ type AppTabTriggerProps = {
   count?: number | null;
   /** When false, count is hidden even if provided (e.g. firearms tab before search). */
   showCount?: boolean;
+  ariaLabel?: string;
   className?: string;
 };
 
@@ -26,6 +27,7 @@ export function AppTabTrigger({
   icon: Icon,
   count,
   showCount = true,
+  ariaLabel,
   className,
 }: AppTabTriggerProps) {
   const displayLabel =
@@ -34,6 +36,7 @@ export function AppTabTrigger({
   return (
     <TabsTrigger
       value={value}
+      aria-label={ariaLabel}
       className={cn(
         "flex items-center justify-center gap-1.5 rounded-xl text-xs sm:text-sm",
         className,
