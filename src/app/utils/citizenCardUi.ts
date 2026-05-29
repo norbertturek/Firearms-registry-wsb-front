@@ -8,6 +8,10 @@ export const CITIZEN_NAV_ICON_TONE_DISABLED = "bg-muted text-muted-foreground";
 export const CITIZEN_LIST_CARD_CLASS =
   "rounded-2xl border-none shadow-sm gap-0 cursor-pointer active:scale-[0.99]";
 
+/** Stacked e-permit cards — lift on hover to reveal deck layering. */
+export const CITIZEN_PERMIT_STACK_CARD_INTERACTION =
+  "cursor-pointer transition-transform hover:-translate-y-1 active:scale-[0.99]";
+
 /**
  * List tile CardContent — uniform p-4; overrides CardContent default [&:last-child]:pb-6.
  */

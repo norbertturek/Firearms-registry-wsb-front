@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { Tabs, TabsContent, TabsTrigger } from "../components/ui/tabs";
+import { Tabs, TabsContent } from "../components/ui/tabs";
 import { AppTabsList } from "../components/ui/AppTabsList";
+import { AppTabTrigger } from "../components/ui/AppTabTrigger";
 import { FileText, Clock, CheckCircle, Shield, CreditCard, AlertTriangle, Search, User, CalendarCheck, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { wpaService } from "../../services/wpaService";
@@ -17,7 +18,6 @@ import {
 import { ApplicationListTile } from "../components/wpa/ApplicationListTile";
 import { WpaListSectionHeader } from "../components/wpa/WpaListSectionHeader";
 import { WpaQuickToolCard } from "../components/wpa/WpaQuickToolCard";
-import { cn } from "../components/ui/utils";
 import { getPermitApplicationTypeLabel } from "../utils/permitLabels";
 
 function getStatusBadge(status: string) {
@@ -51,22 +51,6 @@ function sortPendingApplications<T extends { statusName: string; createdAt: stri
     if (statusDiff !== 0) return statusDiff;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
-}
-
-function getTabCountBadge(count: number, tone: "default" | "alert" = "default") {
-  if (count <= 0) return null;
-  return (
-    <Badge
-      className={cn(
-        "ml-1.5 px-1.5 py-0 text-xs h-5 min-w-5",
-        tone === "alert"
-          ? "bg-amber-500 hover:bg-amber-600"
-          : "bg-slate-500 hover:bg-slate-600",
-      )}
-    >
-      {count > 99 ? "99+" : count}
-    </Badge>
-  );
 }
 
 function getMedicalAlertLines(alert: WpaMedicalAlertDto) {
@@ -185,21 +169,9 @@ export function OfficerDashboard() {
 
       <Tabs defaultValue={defaultTab} className="space-y-4 md:space-y-6">
         <AppTabsList className="grid grid-cols-3">
-          <TabsTrigger value="permits" className="flex items-center justify-center gap-1.5 rounded-xl text-xs sm:text-sm">
-            <Shield className="h-4 w-4 shrink-0" aria-hidden />
-            <span>Pozwolenia</span>
-            {getTabCountBadge(pendingPermits.length)}
-          </TabsTrigger>
-          <TabsTrigger value="promises" className="flex items-center justify-center gap-1.5 rounded-xl text-xs sm:text-sm">
-            <CreditCard className="h-4 w-4 shrink-0" aria-hidden />
-            <span>Promesy</span>
-            {getTabCountBadge(pendingPromises.length)}
-          </TabsTrigger>
-          <TabsTrigger value="alerts" className="flex items-center justify-center gap-1.5 rounded-xl text-xs sm:text-sm">
-            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
-            <span>Alerty</span>
-            {getTabCountBadge(alerts.length, "alert")}
-          </TabsTrigger>
+          <AppTabTrigger value="permits" label="Pozwolenia" icon={Shield} count={pendingPermits.length} />
+          <AppTabTrigger value="promises" label="Promesy" icon={CreditCard} count={pendingPromises.length} />
+          <AppTabTrigger value="alerts" label="Alerty" icon={AlertTriangle} count={alerts.length} />
         </AppTabsList>
 
         <TabsContent value="permits" className="mt-0 space-y-3">

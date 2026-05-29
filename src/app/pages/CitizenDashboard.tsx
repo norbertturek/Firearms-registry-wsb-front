@@ -12,7 +12,7 @@ import { citizenService } from "../../services/citizenService";
 import type { CitizenMedicalAlertDto, CitizenProfileDto, PermitDto, PermitApplicationDto, PromiseApplicationDto } from "../../types/api";
 import { mapPermitExamEntries, worstExamStatus } from "../../lib/permitExams";
 import { getApplicationStatusMeta } from "../../lib/statusUi";
-import { CITIZEN_NAV_ICON_TONE } from "../utils/citizenCardUi";
+import { CITIZEN_NAV_ICON_TONE, CITIZEN_PERMIT_STACK_CARD_INTERACTION } from "../utils/citizenCardUi";
 
 type RecentEntry =
   | { kind: "permit"; data: PermitApplicationDto }
@@ -139,11 +139,13 @@ export function CitizenDashboard() {
             {sortedPermits.map((permit, index) => (
               <div
                 key={permit.id}
-                className={`relative overflow-hidden rounded-2xl p-4 min-h-[164px] shadow-[0_-4px_10px_rgba(15,23,42,0.08),0_10px_22px_rgba(15,23,42,0.14)] ring-1 ring-white/15 cursor-pointer transition-transform active:scale-[0.99] ${
+                className={cn(
+                  "relative overflow-hidden rounded-2xl p-4 min-h-[164px] shadow-[0_-4px_10px_rgba(15,23,42,0.08),0_10px_22px_rgba(15,23,42,0.14)] ring-1 ring-white/15",
+                  CITIZEN_PERMIT_STACK_CARD_INTERACTION,
                   permit.statusName === "Active"
                     ? permitCardThemes[permit.permitTypeName] ?? permitCardThemes.Other
-                    : "bg-muted text-foreground"
-                }`}
+                    : "bg-muted text-foreground",
+                )}
                 style={{
                   marginTop: index === 0 ? 0 : -86,
                   zIndex: index + 1,

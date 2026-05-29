@@ -83,19 +83,35 @@ function ApplicationHeaderInfo({
 
   return (
     <div className="min-w-0 flex-1 space-y-1.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className={labelClass}>Rodzaj wniosku</p>
-            {getStatusBadge(app.statusName)}
+      {compact ? (
+        <>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <p className={labelClass}>Rodzaj wniosku</p>
+              {getStatusBadge(app.statusName)}
+            </div>
+            <div className="shrink-0 text-right">
+              <p className={labelClass}>Data złożenia</p>
+              <p className={metaClass}>{formatDateTime(app.createdAt)}</p>
+            </div>
           </div>
-          <p className={cn(titleClass, "mt-0.5")}>{getAppTitle(permitApp, promiseApp)}</p>
+          <p className={cn(titleClass, "mt-0.5 w-full")}>{getAppTitle(permitApp, promiseApp)}</p>
+        </>
+      ) : (
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className={labelClass}>Rodzaj wniosku</p>
+              {getStatusBadge(app.statusName)}
+            </div>
+            <p className={cn(titleClass, "mt-0.5")}>{getAppTitle(permitApp, promiseApp)}</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className={labelClass}>Data złożenia</p>
+            <p className={metaClass}>{formatDateTime(app.createdAt)}</p>
+          </div>
         </div>
-        <div className="shrink-0 text-right">
-          <p className={labelClass}>Data złożenia</p>
-          <p className={metaClass}>{formatDateTime(app.createdAt)}</p>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

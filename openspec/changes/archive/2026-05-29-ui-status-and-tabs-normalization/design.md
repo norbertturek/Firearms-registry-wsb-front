@@ -28,6 +28,8 @@ This change is cross-cutting because it touches shared UI contracts and multiple
 
 2. **App-level tabs shell preset**
    - Introduce reusable tabs wrapper/preset class for multi-segment lists with consistent spacing and visual hierarchy.
+   - Introduce `AppTabTrigger` for list/review tabs: optional Lucide icon, label with in-text count (`formatTabLabel`), `rounded-xl text-xs sm:text-sm`.
+   - Tab segment counts SHALL appear in the label text, not as separate Badge chips on triggers.
    - Existing `Tabs` primitive remains unchanged; the preset is composition-level to avoid breaking all tabs use-cases.
    - Alternative rejected: force one style directly inside base `TabsList` (too invasive).
 
@@ -36,8 +38,17 @@ This change is cross-cutting because it touches shared UI contracts and multiple
      - `ApplicationsList`,
      - `ApplicationDetails`,
      - `TransfersList`,
-     - `MedicalAlertsView`.
+     - `MedicalAlertsView`,
+     - `OfficerDashboard`,
+     - `WPASearchPage`.
    - This gives visible consistency gains while keeping rollout risk manageable.
+
+4. **Citizen applications CTA**
+   - On `ApplicationsList`, citizens see a tab-dependent primary action below tabs: new permit vs new promise (respecting `canApplyForPromise` / disabled state when promise not allowed).
+   - WPA officer view on the same route does not show this CTA.
+
+5. **Header home navigation**
+   - Logo + “e-Broń” in `Layout` navigate to the current role’s dashboard path.
 
 ## Risks / Trade-offs
 

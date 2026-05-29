@@ -20,6 +20,13 @@ export function Layout() {
 
   const userRole = getUserRole();
 
+  const roleHomePath: Record<string, string> = {
+    citizen: "/citizen",
+    officer: "/officer",
+    shop: "/shop",
+  };
+  const homePath = roleHomePath[userRole] ?? "/citizen";
+
   const isNavItemActive = (itemPath: string) => {
     const path = location.pathname;
     if (itemPath === "/applications") {
@@ -55,7 +62,7 @@ export function Layout() {
         return [
           { label: "Pulpit", path: "/officer", icon: Home },
           { label: "Zadania", path: "/applications", icon: CheckSquare },
-          { label: "Rejestr", path: "/wpa/search", search: "?tab=firearms", icon: Shield },
+          { label: "Rejestr", path: "/wpa/search", icon: Shield },
         ];
       case "shop":
         return [
@@ -90,10 +97,15 @@ export function Layout() {
                   <ChevronLeft className="h-6 w-6 text-primary" />
                 </Button>
               )}
-              <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => navigate(homePath)}
+                className="flex items-center gap-2.5 rounded-xl hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Przejdź do pulpitu"
+              >
                 <AppLogo size="lg" />
-                <h1 className="text-xl font-bold text-foreground">e-Broń</h1>
-              </div>
+                <span className="text-xl font-bold text-foreground">e-Broń</span>
+              </button>
             </div>
             
             <div className="flex items-center gap-2">
@@ -161,14 +173,12 @@ export function Layout() {
                   key={item.path}
                   onClick={() => navigate(navTarget(item))}
                   className={cn(
-                    "flex flex-1 flex-col items-center justify-center gap-0.5 min-h-0 h-full rounded-xl transition-colors cursor-pointer hover:text-foreground",
-                    isActive ? "text-primary bg-primary/10" : "text-muted-foreground",
+                    "flex flex-1 flex-col items-center justify-center gap-0.5 min-h-0 h-full rounded-xl cursor-pointer",
+                    isActive ? "text-primary" : "text-muted-foreground",
                   )}
                 >
-                  <Icon className="h-6 w-6" strokeWidth={isActive ? 2.5 : 2} />
-                  <span className={cn("text-[11px] font-medium tracking-wide", isActive && "font-bold")}>
-                    {item.label}
-                  </span>
+                  <Icon className="h-6 w-6" aria-hidden />
+                  <span className="text-[11px] font-medium tracking-wide">{item.label}</span>
                 </button>
               );
             })}

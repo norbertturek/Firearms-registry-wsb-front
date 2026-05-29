@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Tabs, TabsContent, TabsTrigger } from "../components/ui/tabs";
+import { Tabs, TabsContent } from "../components/ui/tabs";
 import { AppTabsList } from "../components/ui/AppTabsList";
-import { CheckCircle, ChevronRight, Shield } from "lucide-react";
+import { AppTabTrigger } from "../components/ui/AppTabTrigger";
+import { CheckCircle, ChevronRight, Shield, ClipboardList, AlertTriangle } from "lucide-react";
 import { cn } from "../components/ui/utils";
 import { CitizenNavIconTile } from "../components/citizen/CitizenNavIconTile";
 import { PermitExamStatusRow } from "../components/citizen/PermitExamStatusRow";
@@ -141,22 +141,8 @@ export function MedicalAlertsView() {
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <AppTabsList className="grid grid-cols-2">
-            <TabsTrigger value="all" className="rounded-xl">
-              Wszystkie
-              {allGroups.length > 0 && (
-                <Badge className="ml-2 bg-slate-500 hover:bg-slate-600 px-1.5 py-0 text-xs h-5 min-w-5">
-                  {allGroups.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="attention" className="rounded-xl">
-              Wymaga uwagi
-              {attentionGroups.length > 0 && (
-                <Badge className="ml-2 bg-amber-500 hover:bg-amber-600 px-1.5 py-0 text-xs h-5 min-w-5">
-                  {attentionGroups.length}
-                </Badge>
-              )}
-            </TabsTrigger>
+            <AppTabTrigger value="all" label="Wszystkie" icon={ClipboardList} count={allGroups.length} />
+            <AppTabTrigger value="attention" label="Wymaga uwagi" icon={AlertTriangle} count={attentionGroups.length} />
           </AppTabsList>
 
           <TabsContent value="all" className="space-y-3">

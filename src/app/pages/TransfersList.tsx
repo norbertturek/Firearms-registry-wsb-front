@@ -3,9 +3,10 @@ import { useNavigate } from "react-router";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Tabs, TabsContent, TabsTrigger } from "../components/ui/tabs";
+import { Tabs, TabsContent } from "../components/ui/tabs";
 import { AppTabsList } from "../components/ui/AppTabsList";
-import { ArrowRightLeft, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
+import { AppTabTrigger } from "../components/ui/AppTabTrigger";
+import { ArrowRightLeft, CheckCircle, XCircle, Clock, AlertCircle, Inbox, ArrowUpRight, History } from "lucide-react";
 import { toast } from "sonner";
 import { citizenService, translateTransferError } from "../../services/citizenService";
 import type { TransferRequestDto } from "../../types/api";
@@ -237,16 +238,9 @@ export function TransfersList() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <AppTabsList className="grid grid-cols-3">
-          <TabsTrigger value="incoming" className="rounded-xl">
-            Przychodzące
-            {incoming.length > 0 && (
-              <Badge className="ml-2 bg-amber-500 hover:bg-amber-600 px-1.5 py-0 text-xs h-5 min-w-5">
-                {incoming.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="outgoing" className="rounded-xl">Wychodzące</TabsTrigger>
-          <TabsTrigger value="completed" className="rounded-xl">Historia</TabsTrigger>
+          <AppTabTrigger value="incoming" label="Przychodzące" icon={Inbox} count={incoming.length} />
+          <AppTabTrigger value="outgoing" label="Wychodzące" icon={ArrowUpRight} count={outgoing.length} />
+          <AppTabTrigger value="completed" label="Historia" icon={History} count={completed.length} />
         </AppTabsList>
 
         <TabsContent value="incoming" className="space-y-4">

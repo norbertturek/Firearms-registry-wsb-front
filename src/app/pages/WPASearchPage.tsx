@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { Tabs, TabsContent, TabsTrigger } from "../components/ui/tabs";
+import { Tabs, TabsContent } from "../components/ui/tabs";
 import { AppTabsList } from "../components/ui/AppTabsList";
+import { AppTabTrigger } from "../components/ui/AppTabTrigger";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Checkbox } from "../components/ui/checkbox";
 import { Label } from "../components/ui/label";
@@ -15,6 +16,7 @@ import { getFirearmStatusMeta } from "../../lib/statusUi";
 import { User, Shield, ChevronRight, AlertTriangle, ChevronLeft } from "lucide-react";
 import { ApplicationListTile } from "../components/wpa/ApplicationListTile";
 import { WpaListSectionHeader } from "../components/wpa/WpaListSectionHeader";
+import { PERMIT_TYPE_LABELS } from "../utils/permitLabels";
 
 const PAGE_SIZE = 20;
 
@@ -36,6 +38,10 @@ function getStatusBadge(status: string) {
     return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
   }
   return <Badge variant={meta.variant} className={meta.badgeClassName}>{meta.label}</Badge>;
+}
+
+function getPermitTypeLabel(type: string) {
+  return PERMIT_TYPE_LABELS[type] ?? type;
 }
 
 function getCategoryBadge(category: string) {
@@ -117,14 +123,6 @@ function tabFromSearchParam(value: string | null): TabValue {
   return value === "firearms" ? "firearms" : "citizens";
 }
 
-function getTabCountBadge(count: number) {
-  if (count <= 0) return null;
-  return (
-    <Badge className="ml-1.5 bg-slate-500 hover:bg-slate-600 px-1.5 py-0 text-xs h-5 min-w-5">
-      {count > 99 ? "99+" : count}
-    </Badge>
-  );
-}
 
 function getCitizensSectionDescription(query: string, total: number, loading: boolean) {
   if (loading && total === 0) return "Ładowanie...";
@@ -236,12 +234,12 @@ export function WPASearchPage() {
   }, [debouncedQuery, firearmSearchBy, permitTypeFilter]);
 
   useEffect(() => {
-    if (activeTab === "citizens") fetchCitizens(citizensPage);
-  }, [activeTab, citizensPage, fetchCitizens]);
+    fetchCitizens(citizensPage);
+  }, [citizensPage, fetchCitizens]);
 
   useEffect(() => {
-    if (activeTab === "firearms") doFirearmSearch(firearmsPage);
-  }, [activeTab, firearmsPage, doFirearmSearch]);
+    doFirearmSearch(firearmsPage);
+  }, [firearmsPage, doFirearmSearch]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -328,16 +326,14 @@ export function WPASearchPage() {
         className="space-y-4"
       >
         <AppTabsList className="grid grid-cols-2">
-          <TabsTrigger value="citizens" className="flex items-center justify-center gap-1.5 rounded-xl text-xs md:text-sm">
-            <User className="h-4 w-4 shrink-0" aria-hidden />
-            <span>Obywatele</span>
-            {getTabCountBadge(citizensTotalCount)}
-          </TabsTrigger>
-          <TabsTrigger value="firearms" className="flex items-center justify-center gap-1.5 rounded-xl text-xs md:text-sm">
-            <Shield className="h-4 w-4 shrink-0" aria-hidden />
-            <span>Broń</span>
-            {firearmsSearched && getTabCountBadge(firearmsTotalCount)}
-          </TabsTrigger>
+          <AppTabTrigger value="citizens" label="Obywatele" icon={User} count={citizensTotalCount} className="text-xs md:text-sm" />
+          <AppTabTrigger
+            value="firearms"
+            label="Broń"
+            icon={Shield}
+            count={firearmsTotalCount}
+            className="text-xs md:text-sm"
+          />
         </AppTabsList>
 
         <TabsContent value="citizens" className="mt-0 space-y-3">
@@ -378,7 +374,7 @@ export function WPASearchPage() {
                             variant="secondary"
                             className="rounded-full px-2 py-0.5 text-[10px] md:text-xs"
                           >
-                            {permit.permitTypeName}
+                            {getPermitTypeLabel(permit.permitTypeName)}
                           </Badge>
                         ))}
                       </div>
@@ -438,7 +434,7 @@ export function WPASearchPage() {
                         {getStatusBadge(f.status)}
                         {getCategoryBadge(f.category)}
                         <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px] md:text-xs">
-                          {f.permitType}
+                          {getPermitTypeLabel(f.permitType)}
                         </Badge>
                       </div>
                     }
