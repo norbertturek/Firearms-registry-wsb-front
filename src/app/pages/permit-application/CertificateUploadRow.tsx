@@ -34,7 +34,7 @@ export function CertificateUploadRow({
 
   return (
     <div id={id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0 scroll-mt-24">
-      <CitizenNavIconTile className="self-center shrink-0 scale-90 [&_svg]:h-5 [&_svg]:w-5 p-2.5">
+      <CitizenNavIconTile className="self-start shrink-0 scale-90 [&_svg]:h-5 [&_svg]:w-5 p-2.5">
         <Icon />
       </CitizenNavIconTile>
       <div className="flex-1 min-w-0 space-y-2">

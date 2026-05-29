@@ -126,7 +126,7 @@ export function LoginPage() {
 
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
               <Card
-                className="cursor-pointer hover:bg-muted/50 transition-colors border-none shadow-sm rounded-2xl active:scale-[0.98]"
+                className="cursor-pointer border-none shadow-sm rounded-2xl active:scale-[0.98]"
                 onClick={() => handleTestLogin("citizen")}
               >
                 <CardContent className="p-4 text-center flex flex-col items-center justify-center h-full">
@@ -139,7 +139,7 @@ export function LoginPage() {
               </Card>
 
               <Card
-                className="cursor-pointer hover:bg-muted/50 transition-colors border-none shadow-sm rounded-2xl active:scale-[0.98]"
+                className="cursor-pointer border-none shadow-sm rounded-2xl active:scale-[0.98]"
                 onClick={() => handleTestLogin("joanna")}
               >
                 <CardContent className="p-4 text-center flex flex-col items-center justify-center h-full">
@@ -152,7 +152,7 @@ export function LoginPage() {
               </Card>
 
               <Card
-                className="cursor-pointer hover:bg-muted/50 transition-colors border-none shadow-sm rounded-2xl active:scale-[0.98]"
+                className="cursor-pointer border-none shadow-sm rounded-2xl active:scale-[0.98]"
                 onClick={() => handleTestLogin("officer")}
               >
                 <CardContent className="p-4 text-center flex flex-col items-center justify-center h-full">
@@ -165,7 +165,7 @@ export function LoginPage() {
               </Card>
 
               <Card
-                className="cursor-pointer hover:bg-muted/50 transition-colors border-none shadow-sm rounded-2xl active:scale-[0.98]"
+                className="cursor-pointer border-none shadow-sm rounded-2xl active:scale-[0.98]"
                 onClick={() => handleTestLogin("shop")}
               >
                 <CardContent className="p-4 text-center flex flex-col items-center justify-center h-full">

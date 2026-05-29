@@ -8,6 +8,7 @@ import { canApplyForPromise } from "../utils/permitEligibility";
 import { PermitRequiredForPromiseNotice } from "../components/citizen/PermitRequiredForPromiseNotice";
 import { cn } from "../components/ui/utils";
 import {
+  CITIZEN_LIST_CARD_CLASS,
   CITIZEN_LIST_CARD_CONTENT_CLASS,
   CITIZEN_NAV_ICON_TONE,
   CITIZEN_NAV_ICON_TONE_DISABLED,
@@ -35,10 +36,8 @@ function TypeSelectCard({
   return (
     <Card
       className={cn(
-        "rounded-2xl border-none shadow-sm gap-0 transition-colors",
-        disabled
-          ? "opacity-75 cursor-not-allowed bg-muted/20"
-          : "hover:bg-muted/30 cursor-pointer active:scale-[0.99]",
+        CITIZEN_LIST_CARD_CLASS,
+        disabled && "opacity-75 cursor-not-allowed bg-muted/20 active:scale-100",
       )}
       onClick={() => {
         if (!disabled) onClick();
@@ -127,10 +126,7 @@ export function ApplicationTypeSelect() {
           />
         )}
 
-        <Card
-          className="rounded-2xl border-none shadow-sm gap-0 hover:bg-muted/30 transition-colors cursor-pointer active:scale-[0.99]"
-          onClick={() => navigate("/applications")}
-        >
+        <Card className={CITIZEN_LIST_CARD_CLASS} onClick={() => navigate("/applications")}>
           <CardContent className={CITIZEN_LIST_CARD_CONTENT_CLASS}>
             <div className="flex items-center gap-3">
               <div className={cn("p-3 rounded-2xl shrink-0", CITIZEN_NAV_ICON_TONE)}>

@@ -74,10 +74,7 @@ export function MedicalAlertsView() {
         <CardContent className={CITIZEN_LIST_CARD_CONTENT_CLASS}>
           <button
             type="button"
-            className={cn(
-              "flex w-full items-center gap-3 text-left rounded-xl -m-1 p-1 transition-colors",
-              "hover:bg-muted/30 active:scale-[0.99]",
-            )}
+            className="flex w-full items-center gap-3 text-left rounded-xl -m-1 p-1 active:scale-[0.99]"
             onClick={() => navigate(`/permits/${group.permitId}`)}
           >
             <CitizenNavIconTile>

@@ -1,4 +1,4 @@
-import { AlertCircle, Brain, ChevronRight, HeartPulse, Shield } from "lucide-react";
+import { AlertCircle, Brain, ChevronRight, HeartPulse, Shield, Stethoscope } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -108,7 +108,7 @@ export function PermitApplicationForm() {
           <CardContent className={cn(CITIZEN_LIST_CARD_CONTENT_CLASS, "pt-4")}>
             <div className="flex items-center gap-3 mb-1">
               <div className={cn("p-3 rounded-2xl shrink-0", CITIZEN_NAV_ICON_TONE)}>
-                <HeartPulse className="h-6 w-6" aria-hidden />
+                <Stethoscope className="h-6 w-6" aria-hidden />
               </div>
               <div>
                 <h2 className="font-semibold text-sm text-foreground">Zaświadczenia</h2>

@@ -197,7 +197,7 @@ export function CitizenDetailsWPA() {
                   {citizen.permits.map((permit) => (
                     <div
                       key={permit.id}
-                      className="bg-muted/30 rounded-2xl p-4 hover:bg-muted/50 transition-colors cursor-pointer active:scale-[0.99]"
+                      className="bg-muted/30 rounded-2xl p-4 cursor-pointer active:scale-[0.99]"
                       onClick={() => navigate(`/permits/${permit.id}`)}
                     >
                       <div className="flex items-center gap-3 mb-3">

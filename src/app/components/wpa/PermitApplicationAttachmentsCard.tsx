@@ -46,7 +46,7 @@ export function PermitApplicationAttachmentsCard({
                 contentType: attachment.contentType,
               })
             }
-            className="w-full flex items-center justify-between gap-2 md:gap-3 rounded-lg md:rounded-xl bg-muted/30 p-2.5 md:p-3 text-left hover:bg-muted/50 border border-transparent hover:border-primary/20 transition-colors"
+            className="w-full flex items-center justify-between gap-2 md:gap-3 rounded-lg md:rounded-xl bg-muted/30 p-2.5 md:p-3 text-left border border-transparent"
           >
             <div className="flex items-center gap-2 md:gap-3 min-w-0">
               <div className={`p-1.5 md:p-2 rounded-md md:rounded-lg shrink-0 ${isImage ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>

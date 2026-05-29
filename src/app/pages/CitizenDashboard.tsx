@@ -139,7 +139,7 @@ export function CitizenDashboard() {
             {sortedPermits.map((permit, index) => (
               <div
                 key={permit.id}
-                className={`relative overflow-hidden rounded-2xl p-4 min-h-[164px] shadow-[0_-4px_10px_rgba(15,23,42,0.08),0_10px_22px_rgba(15,23,42,0.14)] ring-1 ring-white/15 cursor-pointer transition-transform hover:-translate-y-1 active:scale-[0.99] ${
+                className={`relative overflow-hidden rounded-2xl p-4 min-h-[164px] shadow-[0_-4px_10px_rgba(15,23,42,0.08),0_10px_22px_rgba(15,23,42,0.14)] ring-1 ring-white/15 cursor-pointer transition-transform active:scale-[0.99] ${
                   permit.statusName === "Active"
                     ? permitCardThemes[permit.permitTypeName] ?? permitCardThemes.Other
                     : "bg-muted text-foreground"
@@ -295,7 +295,7 @@ export function CitizenDashboard() {
           ].map(({ label, icon: Icon, path }) => (
             <Card
               key={path}
-              className="rounded-2xl border-none shadow-sm hover:bg-muted/50 transition-colors cursor-pointer active:scale-[0.98]"
+              className="rounded-2xl border-none shadow-sm cursor-pointer active:scale-[0.98]"
               onClick={() => navigate(path)}
             >
               <CardContent className="p-4 flex flex-col items-center justify-center text-center gap-2 h-[100px]">

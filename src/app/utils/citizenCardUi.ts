@@ -6,7 +6,7 @@ export const CITIZEN_NAV_ICON_TONE_DISABLED = "bg-muted text-muted-foreground";
 
 /** List tile Card — neutralize default Card gap-6 between sections. */
 export const CITIZEN_LIST_CARD_CLASS =
-  "rounded-2xl border-none shadow-sm gap-0 hover:bg-muted/30 transition-colors cursor-pointer active:scale-[0.99]";
+  "rounded-2xl border-none shadow-sm gap-0 cursor-pointer active:scale-[0.99]";
 
 /**
  * List tile CardContent — uniform p-4; overrides CardContent default [&:last-child]:pb-6.

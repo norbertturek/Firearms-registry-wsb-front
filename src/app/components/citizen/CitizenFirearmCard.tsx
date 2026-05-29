@@ -28,8 +28,8 @@ export function CitizenFirearmCard({
   return (
     <Card
       className={cn(
-        "rounded-2xl border-none shadow-sm gap-0 overflow-hidden transition-colors",
-        expanded ? "bg-muted/40" : "hover:bg-muted/30",
+        "rounded-2xl border-none shadow-sm gap-0 overflow-hidden bg-card",
+        expanded && "shadow-md ring-1 ring-border/80",
       )}
     >
       <CardContent className={CITIZEN_LIST_CARD_CONTENT_CLASS}>

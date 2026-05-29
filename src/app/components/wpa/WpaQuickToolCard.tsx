@@ -1,7 +1,11 @@
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
-import { CITIZEN_LIST_CARD_CONTENT_CLASS, CITIZEN_NAV_ICON_TONE } from "../../utils/citizenCardUi";
+import {
+  CITIZEN_LIST_CARD_CLASS,
+  CITIZEN_LIST_CARD_CONTENT_CLASS,
+  CITIZEN_NAV_ICON_TONE,
+} from "../../utils/citizenCardUi";
 import { cn } from "../ui/utils";
 
 type WpaQuickToolCardProps = {
@@ -13,10 +17,7 @@ type WpaQuickToolCardProps = {
 
 export function WpaQuickToolCard({ title, description, icon: Icon, onClick }: WpaQuickToolCardProps) {
   return (
-    <Card
-      className="rounded-2xl border-none shadow-sm gap-0 hover:bg-muted/30 transition-colors cursor-pointer active:scale-[0.98]"
-      onClick={onClick}
-    >
+    <Card className={cn(CITIZEN_LIST_CARD_CLASS, "active:scale-[0.98]")} onClick={onClick}>
       <CardContent className={CITIZEN_LIST_CARD_CONTENT_CLASS}>
         <div className="flex items-center gap-3">
           <div className={cn("p-3 rounded-2xl shrink-0", CITIZEN_NAV_ICON_TONE)}>
