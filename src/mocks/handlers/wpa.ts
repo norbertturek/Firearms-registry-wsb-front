@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw';
 import * as db from '../db';
+import { generatePermitNumber, generatePromiseNumber } from '../../lib/registryNumbers';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
 const OFFICER_NAME = 'sgt. Mariusz Nowak';
@@ -7,6 +8,52 @@ const OFFICER_NAME = 'sgt. Mariusz Nowak';
 function qp(url: URL, key: string, fallback: number) {
   const v = url.searchParams.get(key);
   return v !== null ? Number(v) : fallback;
+}
+
+function buildWpaCitizenDetail(id: string) {
+  const citizen = db.wpaCitizens.find((c) => c.id === id);
+  if (!citizen) return null;
+
+  const permitsFromRegistry = db.permits.filter((p) => p.citizenId === id);
+  const summaryPermits = citizen.permits ?? [];
+
+  const permits =
+    permitsFromRegistry.length > 0
+      ? permitsFromRegistry
+      : summaryPermits.map(
+          (summary: { permitNumber: string; permitTypeName: string }, index: number) => ({
+            id: `permit-stub-${id}-${index}`,
+            permitNumber: summary.permitNumber,
+            permitType: summary.permitTypeName,
+            permitTypeName: summary.permitTypeName,
+            status: 'Active',
+            statusName: 'Active',
+            issueDate: citizen.createdAt,
+            expiryDate: new Date(Date.now() + 365 * 86_400_000).toISOString(),
+            maxFirearms: 5,
+            usedSlots: citizen.totalFirearms ?? 0,
+            availableSlots: Math.max(0, 5 - (citizen.totalFirearms ?? 0)),
+            isValid: true,
+            medicalExamExpiryDate: new Date(Date.now() + 60 * 86_400_000).toISOString(),
+            psychologicalExamExpiryDate: new Date(Date.now() + 200 * 86_400_000).toISOString(),
+            citizenId: id,
+          }),
+        );
+
+  const activeAlerts = Math.max(
+    citizen.activeAlerts ?? 0,
+    db.medicalAlerts.filter((a) => a.citizenId === id && !a.isResolved).length,
+  );
+
+  const totalFirearms =
+    id === db.IDS.citizenProfile ? db.firearms.length : (citizen.totalFirearms ?? 0);
+
+  return {
+    ...citizen,
+    permits,
+    totalFirearms,
+    activeAlerts,
+  };
 }
 
 export const wpaHandlers = [
@@ -25,9 +72,17 @@ export const wpaHandlers = [
     return HttpResponse.json(app);
   }),
 
-  http.post(`${BASE}/wpa/permit-applications/:id/mark-under-review`, ({ params }) => {
+  http.post(`${BASE}/wpa/permit-applications/:id/mark-under-review`, async ({ params, request }) => {
     const app = db.permitApplications.find((a) => a.id === params.id);
-    if (app) { app.status = 'UnderReview'; app.statusName = 'UnderReview'; }
+    if (!app) return HttpResponse.json({ message: 'Not found' }, { status: 404 });
+    const body = (await request.json().catch(() => ({}))) as {
+      medicalExamExpiryDate?: string;
+      psychologicalExamExpiryDate?: string;
+    };
+    if (body.medicalExamExpiryDate) app.medicalExamExpiryDate = body.medicalExamExpiryDate;
+    if (body.psychologicalExamExpiryDate) app.psychologicalExamExpiryDate = body.psychologicalExamExpiryDate;
+    app.status = 'UnderReview';
+    app.statusName = 'UnderReview';
     return new HttpResponse(null, { status: 204 });
   }),
 
@@ -45,7 +100,7 @@ export const wpaHandlers = [
     });
     db.permits.push({
       id: db.uid(),
-      permitNumber: `PZ-${new Date().getFullYear()}-${String(db.permits.length + 1).padStart(5, '0')}`,
+      permitNumber: generatePermitNumber(),
       permitType: app.requestedPermitType,
       permitTypeName: app.requestedPermitTypeName,
       status: 'Active',
@@ -69,6 +124,8 @@ export const wpaHandlers = [
     Object.assign(app, {
       status: 'Rejected', statusName: 'Rejected',
       rejectionReason: body.reason ?? null,
+      medicalExamExpiryDate: body.medicalExamExpiryDate ?? app.medicalExamExpiryDate,
+      psychologicalExamExpiryDate: body.psychologicalExamExpiryDate ?? app.psychologicalExamExpiryDate,
       reviewedAt: new Date().toISOString(),
       reviewedByOfficerName: OFFICER_NAME,
     });
@@ -82,6 +139,8 @@ export const wpaHandlers = [
     Object.assign(app, {
       status: 'RequiresCorrection', statusName: 'RequiresCorrection',
       correctionNotes: body.reason ?? null,
+      medicalExamExpiryDate: body.medicalExamExpiryDate ?? app.medicalExamExpiryDate,
+      psychologicalExamExpiryDate: body.psychologicalExamExpiryDate ?? app.psychologicalExamExpiryDate,
       reviewedAt: new Date().toISOString(),
       reviewedByOfficerName: OFFICER_NAME,
     });
@@ -123,7 +182,7 @@ export const wpaHandlers = [
     });
     db.promises.push({
       id: db.uid(),
-      promiseNumber: `PROM-${new Date().getFullYear()}-${String(db.promises.length + 1).padStart(5, '0')}`,
+      promiseNumber: generatePromiseNumber(),
       weaponType: app.requestedWeaponType,
       quantity: app.requestedQuantity,
       usedQuantity: 0,
@@ -170,18 +229,54 @@ export const wpaHandlers = [
   // ── Citizens ───────────────────────────────────────────────────────────────
   http.get(`${BASE}/wpa/citizens`, ({ request }) => {
     const url = new URL(request.url);
-    return HttpResponse.json(db.paginate([db.wpaCitizen], qp(url, 'page', 1), qp(url, 'pageSize', 20)));
+    const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
+    const searchBy = url.searchParams.get('searchBy') ?? 'all';
+    const permitType = url.searchParams.get('permitType');
+    const hasAlerts = url.searchParams.get('hasAlerts');
+
+    let items = db.wpaCitizens.map((c) => ({
+      ...c,
+      activeAlerts: Math.max(
+        c.activeAlerts ?? 0,
+        db.medicalAlerts.filter((a) => a.citizenId === c.id && !a.isResolved).length,
+      ),
+    }));
+
+    if (q) {
+      items = items.filter((c) => {
+        const fullName = `${c.firstName} ${c.lastName}`.toLowerCase();
+        const permitNumbers = (c.permits ?? []).map((p: { permitNumber: string }) => p.permitNumber.toLowerCase());
+        if (searchBy === 'name') return fullName.includes(q);
+        if (searchBy === 'pesel') return String(c.pesel).includes(q);
+        if (searchBy === 'permitNumber') return permitNumbers.some((n: string) => n.includes(q));
+        return (
+          fullName.includes(q)
+          || String(c.pesel).includes(q)
+          || permitNumbers.some((n: string) => n.includes(q))
+          || String(c.weaponBookNumber ?? '').toLowerCase().includes(q)
+        );
+      });
+    }
+
+    if (permitType) {
+      items = items.filter((c) =>
+        (c.permits ?? []).some((p: { permitTypeName: string }) => p.permitTypeName === permitType),
+      );
+    }
+
+    if (hasAlerts === 'true') {
+      items = items.filter((c) => c.activeAlerts > 0);
+    }
+
+    return HttpResponse.json(db.paginate(items, qp(url, 'page', 1), qp(url, 'pageSize', 20)));
   }),
 
   http.get(`${BASE}/wpa/citizens/:id`, ({ params }) => {
-    if (params.id !== db.IDS.citizenProfile) {
+    const detail = buildWpaCitizenDetail(String(params.id));
+    if (!detail) {
       return HttpResponse.json({ message: 'Not found' }, { status: 404 });
     }
-    return HttpResponse.json({
-      ...db.wpaCitizen,
-      totalFirearms: db.firearms.length,
-      activeAlerts: db.medicalAlerts.filter((a) => !a.isResolved).length,
-    });
+    return HttpResponse.json(detail);
   }),
 
   // ── Firearms search ────────────────────────────────────────────────────────
@@ -201,8 +296,8 @@ export const wpaHandlers = [
         serialNumber: f.serialNumber,
         status: f.status,
         ownerName: 'Jan Kowalski',
-        ownerPesel: '90010*****',
-        permitNumber: 'PZ-2024-00001',
+        ownerPesel: '90010112345',
+        permitNumber: 'POZW-20240501-DEMO0001',
         permitType: 'Sport',
         registeredAt: f.registeredAt,
       }))
@@ -218,6 +313,7 @@ export const wpaHandlers = [
 
   // ── Medical alerts ─────────────────────────────────────────────────────────
   http.get(`${BASE}/wpa/medical-alerts`, ({ request }) => {
+    db.syncMedicalAlertsFromPermits();
     const url = new URL(request.url);
     const resolvedFilter = url.searchParams.get('resolved');
     const items = db.medicalAlerts
@@ -254,6 +350,7 @@ export const wpaHandlers = [
     const body = await request.json() as any;
     p.medicalExamExpiryDate = body.medicalExamExpiryDate;
     p.psychologicalExamExpiryDate = body.psychologicalExamExpiryDate;
+    db.syncMedicalAlertsFromPermits();
     return new HttpResponse(null, { status: 204 });
   }),
 ];

@@ -63,11 +63,20 @@ export const citizenService = {
 
   async uploadPermitApplicationAttachments(
     id: string,
-    files: { medicalCertificate?: File | null; psychologicalCertificate?: File | null }
+    files: {
+      medicalCertificate?: File | null;
+      psychologicalCertificate?: File | null;
+      medicalExamExpiryDate?: string;
+      psychologicalExamExpiryDate?: string;
+    },
   ): Promise<PermitApplicationAttachmentDto[]> {
     const formData = new FormData();
     if (files.medicalCertificate) formData.append('medicalCertificate', files.medicalCertificate);
     if (files.psychologicalCertificate) formData.append('psychologicalCertificate', files.psychologicalCertificate);
+    if (files.medicalExamExpiryDate) formData.append('medicalExamExpiryDate', files.medicalExamExpiryDate);
+    if (files.psychologicalExamExpiryDate) {
+      formData.append('psychologicalExamExpiryDate', files.psychologicalExamExpiryDate);
+    }
     return api.postForm<PermitApplicationAttachmentDto[]>(`/citizen/me/permit-applications/${id}/attachments`, formData);
   },
 

@@ -1,17 +1,31 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
-import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
-import { AlertCircle, CheckCircle, XCircle, FileWarning, Clock, FileText, Image as ImageIcon, Eye } from "lucide-react";
+import { Badge } from "../components/ui/badge";
+import { cn } from "../components/ui/utils";
+import {
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  FileWarning,
+  Clock,
+  Shield,
+  Paperclip,
+  Scale,
+  BookOpen,
+} from "lucide-react";
 import { Separator } from "../components/ui/separator";
 import { toast } from "sonner";
 import { wpaService } from "../../services/wpaService";
+import { WpaApplicationReviewBar } from "../components/wpa/WpaApplicationReviewBar";
+import { ReviewCollapsibleCard } from "../components/wpa/ReviewCollapsibleCard";
+import { applicationSectionIcon } from "../components/wpa/ApplicationDetailField";
+import { PermitApplicationAttachmentsCard } from "../components/wpa/PermitApplicationAttachmentsCard";
 import type { WpaPermitApplicationDto, WpaPromiseApplicationDto, PermitDto } from "../../types/api";
-import { AttachmentPreviewDialog } from "../components/wpa/AttachmentPreviewDialog";
+import { getApplicationStatusMeta } from "../../lib/statusUi";
 
 const PERMIT_TYPE_LABELS: Record<string, string> = {
   Sport: "Sportowe",
@@ -27,6 +41,16 @@ const APPROVABLE_PROMISE_STATUSES = ["UnderReview", "Paid"];
 const APPROVABLE_PERMIT_STATUSES = ["Submitted", "UnderReview"];
 const REVIEWABLE_PROMISE_STATUSES = ["Submitted", "Paid"];
 const REVIEWABLE_PERMIT_STATUSES = ["Submitted"];
+const CORRECTABLE_STATUSES = ["Submitted", "UnderReview"];
+const FINAL_STATUSES = ["Approved", "Rejected"];
+
+function getStatusBadge(status: string) {
+  const meta = getApplicationStatusMeta(status);
+  if (!meta) {
+    return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
+  }
+  return <Badge variant={meta.variant} className={meta.badgeClassName}>{meta.label}</Badge>;
+}
 
 export function DecisionPage() {
   const navigate = useNavigate();
@@ -47,7 +71,6 @@ export function DecisionPage() {
   const [psychologicalExpiry, setPsychologicalExpiry] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [previewAttachment, setPreviewAttachment] = useState<{ id: string; fileName: string; contentType: string } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -93,6 +116,10 @@ export function DecisionPage() {
       : APPROVABLE_PROMISE_STATUSES.includes(app.statusName)
     : false;
 
+  const canRequireCorrection = app ? CORRECTABLE_STATUSES.includes(app.statusName) : false;
+  const canReject = app ? !FINAL_STATUSES.includes(app.statusName) : false;
+  const isReadOnly = app ? FINAL_STATUSES.includes(app.statusName) : false;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !app) return;
@@ -107,6 +134,13 @@ export function DecisionPage() {
       newErrors.decision = type === "promise"
         ? "Najpierw oznacz wniosek jako weryfikowany, dopiero potem zatwierdz promese"
         : "Tego wniosku nie mozna zatwierdzic w obecnym statusie";
+    }
+
+    if (decision === "require-correction" && !canRequireCorrection) {
+      newErrors.decision = "Tego wniosku nie można wezwać do uzupełnienia w obecnym statusie";
+    }
+    if (decision === "reject" && !canReject) {
+      newErrors.decision = "Tego wniosku nie można odrzucić w obecnym statusie";
     }
 
     if (decision === "reject" || decision === "require-correction") {
@@ -132,15 +166,26 @@ export function DecisionPage() {
 
     setSubmitting(true);
     try {
+      const examDates =
+        type === "permit" && medicalExpiry && psychologicalExpiry
+          ? {
+              medicalExamExpiryDate: `${medicalExpiry}T00:00:00Z`,
+              psychologicalExamExpiryDate: `${psychologicalExpiry}T00:00:00Z`,
+            }
+          : undefined;
+
       if (type === "permit") {
-        if (decision === "mark-under-review") await wpaService.markPermitApplicationUnderReview(id);
+        if (decision === "mark-under-review") await wpaService.markPermitApplicationUnderReview(id, examDates);
         else if (decision === "approve") await wpaService.approvePermitApplication(id, {
           maxFirearms: parseInt(maxFirearms, 10),
-          medicalExamExpiryDate: `${medicalExpiry}T00:00:00Z`,
-          psychologicalExamExpiryDate: `${psychologicalExpiry}T00:00:00Z`,
+          medicalExamExpiryDate: examDates!.medicalExamExpiryDate,
+          psychologicalExamExpiryDate: examDates!.psychologicalExamExpiryDate,
         });
-        else if (decision === "reject") await wpaService.rejectPermitApplication(id, { reason: justification });
-        else if (decision === "require-correction") await wpaService.requirePermitApplicationCorrection(id, { reason: justification });
+        else if (decision === "reject") {
+          await wpaService.rejectPermitApplication(id, { reason: justification, ...examDates });
+        } else if (decision === "require-correction") {
+          await wpaService.requirePermitApplicationCorrection(id, { reason: justification, ...examDates });
+        }
       } else {
         if (decision === "mark-under-review") await wpaService.markPromiseApplicationUnderReview(id);
         else if (decision === "approve") await wpaService.approvePromiseApplication(id);
@@ -180,287 +225,148 @@ export function DecisionPage() {
     );
   }
 
-  const appTitle = permitApp
-    ? `Wniosek o pozwolenie — ${PERMIT_TYPE_LABELS[permitApp.requestedPermitTypeName] ?? permitApp.requestedPermitTypeName}`
-    : promiseApp
-      ? `Wniosek o promesę — ${promiseApp.requestedWeaponType}`
-      : "Wniosek";
-
-  const handleAttachmentOpen = (attachmentId: string, fileName: string, contentType: string) => {
-    setPreviewAttachment({ id: attachmentId, fileName, contentType });
-  };
+  const guidelinesContent = (
+    <div className="text-xs md:text-sm text-muted-foreground leading-snug space-y-2 md:space-y-3">
+      <p><strong className="text-foreground">Weryfikacja:</strong> sprawdź ważność badań medycznych, zgodność danych obywatela oraz zasadność uzasadnienia.</p>
+      <p><strong className="text-foreground">Braki:</strong> wybierz &quot;Wezwij do uzupełnienia&quot; i wskaż konkretne braki.</p>
+      <p><strong className="text-foreground">Odrzucenie:</strong> wymaga uzasadnienia zgodnie z k.p.a. art. 107 § 1 pkt 6.</p>
+    </div>
+  );
 
   return (
     <div className="pt-2">
-      <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Rozpatrz wniosek</h1>
-        <p className="text-muted-foreground">Wydaj decyzję administracyjną lub wezwij do uzupełnienia</p>
-      </div>
+      <WpaApplicationReviewBar
+        type={type}
+        permitApp={permitApp}
+        promiseApp={promiseApp}
+        linkedPermit={linkedPermit}
+        contextLabel={isReadOnly ? "Podgląd wniosku" : "Rozpatrz wniosek"}
+      />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-2.5 md:gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Card className="rounded-2xl border-none shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Dane wniosku</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Rodzaj wniosku</p>
-                  <p className="font-medium text-foreground">{appTitle}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Wnioskodawca</p>
-                  <p className="font-medium text-foreground">{app.citizenName} (PESEL: {app.citizenPesel})</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Status</p>
-                  <p className="font-medium text-foreground">{app.statusName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Data złożenia</p>
-                  <p className="font-medium text-foreground">{new Date(app.createdAt).toLocaleString("pl-PL")}</p>
-                </div>
-                {permitApp && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Uzasadnienie obywatela</p>
-                    <p className="text-sm text-foreground bg-muted/30 rounded-lg p-3 mt-1">{permitApp.reason}</p>
-                  </div>
-                )}
-                {promiseApp && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Wnioskowana broń / ilość</p>
-                    <p className="font-medium">{promiseApp.requestedWeaponType} • {promiseApp.requestedQuantity} szt.</p>
-                  </div>
-                )}
-                {permitApp && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm text-muted-foreground">Załączniki do weryfikacji</p>
-                      {permitApp.attachments?.length > 0 && (
-                        <span className="text-xs text-muted-foreground">{permitApp.attachments.length} {permitApp.attachments.length === 1 ? "plik" : "pliki"}</span>
-                      )}
-                    </div>
-                    {permitApp.attachments?.length > 0 ? (
-                      <div className="space-y-2">
-                        {permitApp.attachments.map((attachment) => {
-                          const isImage = attachment.contentType.startsWith("image/");
-                          return (
-                            <button
-                              key={attachment.id}
-                              type="button"
-                              onClick={() => handleAttachmentOpen(attachment.id, attachment.fileName, attachment.contentType)}
-                              className="w-full flex items-center justify-between gap-3 rounded-xl bg-muted/30 p-3 text-left hover:bg-muted/50 border border-transparent hover:border-primary/20 transition-colors"
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className={`p-2 rounded-lg ${isImage ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-                                  {isImage ? <ImageIcon className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium truncate">{attachment.fileName}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {attachment.attachmentTypeName === "MedicalCertificate" ? "Zaświadczenie lekarskie" : "Zaświadczenie psychologiczne"}
-                                    {" • "}
-                                    {(attachment.fileSize / 1024).toFixed(1)} KB
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 text-xs text-primary font-medium shrink-0">
-                                <Eye className="h-4 w-4" />
-                                Podgląd
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="rounded-xl bg-orange-50 p-3 text-sm text-orange-900">
-                        Brak załączonych zaświadczeń. Wezwij obywatela do uzupełnienia.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 md:gap-4">
+            {!isReadOnly && (
+              <ReviewCollapsibleCard
+                title="Wytyczne"
+                description="Przeczytaj przed podjęciem decyzji"
+                icon={applicationSectionIcon(<BookOpen className="h-5 w-5" />)}
+                defaultOpen
+                priority
+                className="order-0 lg:hidden"
+              >
+                {guidelinesContent}
+              </ReviewCollapsibleCard>
+            )}
 
-            {promiseApp && (
-              <Card className="rounded-2xl border-none shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Pozwolenie bazowe i badania obywatela</CardTitle>
-                  <CardDescription>
-                    Promesa może być wydana tylko jeśli pozwolenie jest aktywne, ma wolne sloty i obowywatel ma aktualne badania.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {linkedPermit ? (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Numer pozwolenia</p>
-                          <p className="font-medium font-mono">{linkedPermit.permitNumber}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Typ</p>
-                          <p className="font-medium">
-                            {PERMIT_TYPE_LABELS[linkedPermit.permitTypeName] ?? linkedPermit.permitTypeName}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Status</p>
-                          <p className={`font-medium ${linkedPermit.statusName === "Active" ? "text-emerald-700" : "text-red-600"}`}>
-                            {linkedPermit.statusName === "Active" ? "Aktywne" : linkedPermit.statusName}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Wolne sloty</p>
-                          <p className={`font-medium ${linkedPermit.availableSlots > 0 ? "text-emerald-700" : "text-red-600"}`}>
-                            {linkedPermit.availableSlots} z {linkedPermit.maxFirearms}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Ważne do</p>
-                          <p className="font-medium">{new Date(linkedPermit.expiryDate).toLocaleDateString("pl-PL")}</p>
-                        </div>
-                      </div>
-
-                      <Separator className="bg-border" />
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {(() => {
-                          const today = new Date();
-                          const med = linkedPermit.medicalExamExpiryDate ? new Date(linkedPermit.medicalExamExpiryDate) : null;
-                          const psy = linkedPermit.psychologicalExamExpiryDate ? new Date(linkedPermit.psychologicalExamExpiryDate) : null;
-                          const medValid = med && med >= today;
-                          const psyValid = psy && psy >= today;
-                          return (
-                            <>
-                              <div className={`rounded-xl p-3 ${medValid ? "bg-emerald-50" : "bg-red-50"}`}>
-                                <p className="text-xs text-muted-foreground">Bad. lekarskie ważne do</p>
-                                <p className={`font-semibold ${medValid ? "text-emerald-900" : "text-red-900"}`}>
-                                  {med ? med.toLocaleDateString("pl-PL") : "Brak danych"}
-                                  {!medValid && med && " (wygasło)"}
-                                </p>
-                              </div>
-                              <div className={`rounded-xl p-3 ${psyValid ? "bg-emerald-50" : "bg-red-50"}`}>
-                                <p className="text-xs text-muted-foreground">Bad. psychologiczne ważne do</p>
-                                <p className={`font-semibold ${psyValid ? "text-emerald-900" : "text-red-900"}`}>
-                                  {psy ? psy.toLocaleDateString("pl-PL") : "Brak danych"}
-                                  {!psyValid && psy && " (wygasło)"}
-                                </p>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-                      Nie udało się pobrać pozwolenia bazowego ({promiseApp.permitNumber}). Sprawdź, czy istnieje i czy jest aktywne.
-                      {citizenPermits.length > 0 && (
-                        <p className="mt-2 text-xs">Pozwolenia obywatela: {citizenPermits.map((p) => p.permitNumber).join(", ")}</p>
-                      )}
+            <ReviewCollapsibleCard
+              title={isReadOnly ? "Podgląd decyzji" : "Decyzja"}
+              description={isReadOnly ? "Status końcowy wniosku" : "Wybierz akcję i podaj uzasadnienie"}
+              icon={applicationSectionIcon(<Scale className="h-5 w-5" />)}
+              defaultOpen
+              priority
+              className="order-1 lg:order-6"
+            >
+              {isReadOnly ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {getStatusBadge(app.statusName)}
+                    <p className="text-sm text-muted-foreground">
+                      {app.statusName === "Approved"
+                        ? "Wniosek został zatwierdzony. Decyzja jest ostateczna i nie może być zmieniona."
+                        : "Wniosek został odrzucony. Decyzja jest ostateczna i nie może być zmieniona."}
+                    </p>
+                  </div>
+                  {app.rejectionReason && (
+                    <div className="rounded-xl border border-border bg-muted/30 p-3 md:p-4 space-y-1.5">
+                      <p className="text-sm font-semibold text-foreground">Uzasadnienie odrzucenia</p>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{app.rejectionReason}</p>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            )}
-
-            {permitApp && canApprove && (
-              <Card className="rounded-2xl border-none shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Ważność badań po weryfikacji</CardTitle>
-                  <CardDescription>
-                    Wpisz daty ważności wynikające z dostarczonych zaświadczeń. Zostaną one zapisane na pozwoleniu przy zatwierdzeniu wniosku.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <Label htmlFor="medExp">Bad. lekarskie ważne do <span className="text-red-600">*</span></Label>
-                      <Input
-                        id="medExp"
-                        type="date"
-                        value={medicalExpiry}
-                        onChange={(e) => setMedicalExpiry(e.target.value)}
-                        className="mt-1.5"
-                      />
-                      {errors.medicalExpiry && <p className="flex items-center gap-1.5 mt-1 text-sm text-red-600 animate-in fade-in slide-in-from-top-1 duration-200"><AlertCircle className="h-4 w-4 shrink-0" />{errors.medicalExpiry}</p>}
-                    </div>
-                    <div>
-                      <Label htmlFor="psyExp">Bad. psychologiczne ważne do <span className="text-red-600">*</span></Label>
-                      <Input
-                        id="psyExp"
-                        type="date"
-                        value={psychologicalExpiry}
-                        onChange={(e) => setPsychologicalExpiry(e.target.value)}
-                        className="mt-1.5"
-                      />
-                      {errors.psychologicalExpiry && <p className="flex items-center gap-1.5 mt-1 text-sm text-red-600 animate-in fade-in slide-in-from-top-1 duration-200"><AlertCircle className="h-4 w-4 shrink-0" />{errors.psychologicalExpiry}</p>}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <Card className="rounded-2xl border-none shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Działanie</CardTitle>
-                <CardDescription>Wybierz akcję i podaj uzasadnienie</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
+                </div>
+              ) : (
+              <div className="space-y-4 md:space-y-6">
                 <div>
-                  <RadioGroup
-                    value={decision || ""}
-                    onValueChange={(value) => setDecision(value as Decision)}
-                    className="grid gap-3"
-                  >
-                    <Label htmlFor="mark-under-review" className={`flex items-start space-x-3 border rounded-xl p-4 transition-colors ${canMarkUnderReview ? "cursor-pointer" : "cursor-not-allowed opacity-60"} ${decision === 'mark-under-review' ? 'bg-blue-50/50 border-blue-200' : 'border-border hover:bg-muted/50'}`}>
-                      <RadioGroupItem value="mark-under-review" id="mark-under-review" className="mt-1" disabled={!canMarkUnderReview} />
-                      <div className="flex-1 flex items-start gap-3">
-                        <Clock className="h-5 w-5 text-blue-600 mt-0.5" />
-                        <div>
-                          <p className="font-semibold text-base text-foreground mb-0.5">Oznacz jako weryfikowany</p>
-                          <p className="text-sm text-muted-foreground">Zmiana statusu na &quot;W weryfikacji&quot;</p>
-                        </div>
+                  <div role="radiogroup" aria-label="Wybór decyzji" className="grid gap-2 md:gap-3">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={decision === "mark-under-review"}
+                      disabled={!canMarkUnderReview}
+                      onClick={() => setDecision("mark-under-review")}
+                      className={cn(
+                        "w-full flex items-start gap-2.5 md:gap-3 border rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-colors",
+                        canMarkUnderReview ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                        decision === "mark-under-review" ? "bg-blue-50/50 border-blue-200" : "border-border",
+                      )}
+                    >
+                      <Clock className="h-4 w-4 md:h-5 md:w-5 text-blue-600 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Oznacz jako weryfikowany</p>
+                        <p className="text-xs md:text-sm text-muted-foreground leading-snug">Zmiana statusu na &quot;W weryfikacji&quot;</p>
                       </div>
-                    </Label>
+                    </button>
 
-                    <Label htmlFor="approve" className={`flex items-start space-x-3 border rounded-xl p-4 transition-colors ${canApprove ? "cursor-pointer" : "cursor-not-allowed opacity-60"} ${decision === 'approve' ? 'bg-emerald-50/50 border-emerald-200' : 'border-border hover:bg-muted/50'}`}>
-                      <RadioGroupItem value="approve" id="approve" className="mt-1" disabled={!canApprove} />
-                      <div className="flex-1 flex items-start gap-3">
-                        <CheckCircle className="h-5 w-5 text-emerald-600 mt-0.5" />
-                        <div>
-                          <p className="font-semibold text-base text-foreground mb-0.5">Zatwierdź wniosek</p>
-                          <p className="text-sm text-muted-foreground">{type === "permit" ? "Wygeneruj pozwolenie na broń" : "Wygeneruj aktywną promesę"}</p>
-                        </div>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={decision === "approve"}
+                      disabled={!canApprove}
+                      onClick={() => setDecision("approve")}
+                      className={cn(
+                        "w-full flex items-start gap-2.5 md:gap-3 border rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-colors",
+                        canApprove ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                        decision === "approve" ? "bg-emerald-50/50 border-emerald-200" : "border-border",
+                      )}
+                    >
+                      <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-emerald-600 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Zatwierdź wniosek</p>
+                        <p className="text-xs md:text-sm text-muted-foreground leading-snug">{type === "permit" ? "Wygeneruj pozwolenie na broń" : "Wygeneruj aktywną promesę"}</p>
                       </div>
-                    </Label>
+                    </button>
 
-                    <Label htmlFor="require-correction" className={`flex items-start space-x-3 border rounded-xl p-4 cursor-pointer transition-colors ${decision === 'require-correction' ? 'bg-orange-50/50 border-orange-200' : 'border-border hover:bg-muted/50'}`}>
-                      <RadioGroupItem value="require-correction" id="require-correction" className="mt-1" />
-                      <div className="flex-1 flex items-start gap-3">
-                        <FileWarning className="h-5 w-5 text-orange-500 mt-0.5" />
-                        <div>
-                          <p className="font-semibold text-base text-foreground mb-0.5">Wezwij do uzupełnienia</p>
-                          <p className="text-sm text-muted-foreground">Wniosek posiada braki formalne lub dokumentacyjne</p>
-                        </div>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={decision === "require-correction"}
+                      disabled={!canRequireCorrection}
+                      onClick={() => setDecision("require-correction")}
+                      className={cn(
+                        "w-full flex items-start gap-2.5 md:gap-3 border rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-colors",
+                        canRequireCorrection ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                        decision === "require-correction" ? "bg-orange-50/50 border-orange-200" : "border-border",
+                      )}
+                    >
+                      <FileWarning className="h-4 w-4 md:h-5 md:w-5 text-orange-500 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Wezwij do uzupełnienia</p>
+                        <p className="text-xs md:text-sm text-muted-foreground leading-snug">Wniosek posiada braki formalne lub dokumentacyjne</p>
                       </div>
-                    </Label>
+                    </button>
 
-                    <Label htmlFor="reject" className={`flex items-start space-x-3 border rounded-xl p-4 cursor-pointer transition-colors ${decision === 'reject' ? 'bg-red-50/50 border-red-200' : 'border-border hover:bg-muted/50'}`}>
-                      <RadioGroupItem value="reject" id="reject" className="mt-1" />
-                      <div className="flex-1 flex items-start gap-3">
-                        <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                        <div>
-                          <p className="font-semibold text-base text-foreground mb-0.5">Odrzuć wniosek</p>
-                          <p className="text-sm text-muted-foreground">Wydaj negatywną decyzję z uzasadnieniem</p>
-                        </div>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={decision === "reject"}
+                      disabled={!canReject}
+                      onClick={() => setDecision("reject")}
+                      className={cn(
+                        "w-full flex items-start gap-2.5 md:gap-3 border rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-colors",
+                        canReject ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                        decision === "reject" ? "bg-red-50/50 border-red-200" : "border-border",
+                      )}
+                    >
+                      <XCircle className="h-4 w-4 md:h-5 md:w-5 text-red-600 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm md:text-base text-foreground mb-0.5">Odrzuć wniosek</p>
+                        <p className="text-xs md:text-sm text-muted-foreground leading-snug">Wydaj negatywną decyzję z uzasadnieniem</p>
                       </div>
-                    </Label>
-                  </RadioGroup>
+                    </button>
+                  </div>
                   {type === "promise" && !canApprove && (
                     <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-                      Najpierw oznacz wniosek jako weryfikowany. Zatwierdzenie promesy bedzie dostepne po zmianie statusu na "UnderReview".
+                      Najpierw oznacz wniosek jako weryfikowany. Zatwierdzenie promesy bedzie dostepne po zmianie statusu na &quot;UnderReview&quot;.
                     </div>
                   )}
                   {errors.decision && (
@@ -491,7 +397,7 @@ export function DecisionPage() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Daty ważności badań wpisz w sekcji <strong>&quot;Ważność badań po weryfikacji&quot;</strong> wyżej na stronie.
+                        Daty ważności badań wpisz w sekcji <strong>&quot;Ważność badań po weryfikacji&quot;</strong> poniżej.
                       </p>
                     </div>
                   </>
@@ -505,7 +411,7 @@ export function DecisionPage() {
                         {decision === "mark-under-review" ? "Notatka (opcjonalne)" : "Uzasadnienie decyzji / Treść wezwania"}
                         {decision !== "mark-under-review" && <span className="text-red-600"> *</span>}
                       </Label>
-                      <p className="text-sm text-muted-foreground mb-2">
+                      <p className="text-xs md:text-sm text-muted-foreground leading-snug mb-2">
                         {decision === "mark-under-review"
                           ? "Możesz dodać notatkę wewnętrzną (opcjonalne)."
                           : "Podaj szczegóły decyzji (minimum 20 znaków)."}
@@ -530,40 +436,167 @@ export function DecisionPage() {
                     </div>
                   </>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+              )}
+            </ReviewCollapsibleCard>
 
-            <Button type="submit" disabled={submitting} className="min-h-[52px] w-full rounded-xl text-base font-semibold">
-              {submitting ? "Zapisywanie..." : "Zatwierdź i wyślij"}
-            </Button>
+            {permitApp && (
+              <ReviewCollapsibleCard
+                title="Załączniki"
+                description="Zaświadczenia lekarskie i psychologiczne dołączone przez obywatela"
+                icon={applicationSectionIcon(<Paperclip className="h-5 w-5" />)}
+                defaultOpen
+                className="order-2 lg:order-3"
+              >
+                <PermitApplicationAttachmentsCard
+                  bare
+                  applicationId={permitApp.id}
+                  attachments={permitApp.attachments ?? []}
+                />
+              </ReviewCollapsibleCard>
+            )}
+
+            {permitApp && !isReadOnly && (
+              <ReviewCollapsibleCard
+                title="Ważność badań po weryfikacji"
+                description="Daty z zaświadczeń — widoczne w szczegółach wniosku i zapisywane na pozwoleniu przy zatwierdzeniu"
+                icon={applicationSectionIcon(<Clock className="h-5 w-5" />)}
+                defaultOpen
+                className="order-3 lg:order-5"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="medExp">Bad. lekarskie ważne do <span className="text-red-600">*</span></Label>
+                    <Input
+                      id="medExp"
+                      type="date"
+                      value={medicalExpiry}
+                      onChange={(e) => setMedicalExpiry(e.target.value)}
+                      className="mt-1.5"
+                    />
+                    {errors.medicalExpiry && <p className="flex items-center gap-1.5 mt-1 text-sm text-red-600 animate-in fade-in slide-in-from-top-1 duration-200"><AlertCircle className="h-4 w-4 shrink-0" />{errors.medicalExpiry}</p>}
+                  </div>
+                  <div>
+                    <Label htmlFor="psyExp">Bad. psychologiczne ważne do <span className="text-red-600">*</span></Label>
+                    <Input
+                      id="psyExp"
+                      type="date"
+                      value={psychologicalExpiry}
+                      onChange={(e) => setPsychologicalExpiry(e.target.value)}
+                      className="mt-1.5"
+                    />
+                    {errors.psychologicalExpiry && <p className="flex items-center gap-1.5 mt-1 text-sm text-red-600 animate-in fade-in slide-in-from-top-1 duration-200"><AlertCircle className="h-4 w-4 shrink-0" />{errors.psychologicalExpiry}</p>}
+                  </div>
+                </div>
+              </ReviewCollapsibleCard>
+            )}
+
+            {promiseApp && (
+              <ReviewCollapsibleCard
+                title="Pozwolenie bazowe"
+                description="Promesa może być wydana tylko przy aktywnym pozwoleniu z wolnymi slotami i aktualnych badaniach"
+                icon={applicationSectionIcon(<Shield className="h-5 w-5" />)}
+                defaultOpen={false}
+                className="order-6 lg:order-4"
+              >
+                {linkedPermit ? (
+                  <div className="space-y-3 md:space-y-4">
+                    <div className="grid grid-cols-2 gap-2.5 md:gap-4">
+                      <div>
+                        <p className="text-[11px] md:text-xs text-muted-foreground">Numer pozwolenia</p>
+                        <p className="font-medium font-mono text-xs md:text-sm">{linkedPermit.permitNumber}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] md:text-xs text-muted-foreground">Typ</p>
+                        <p className="font-medium text-sm md:text-base">
+                          {PERMIT_TYPE_LABELS[linkedPermit.permitTypeName] ?? linkedPermit.permitTypeName}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] md:text-xs text-muted-foreground">Status</p>
+                        <p className={`font-medium text-sm md:text-base ${linkedPermit.statusName === "Active" ? "text-emerald-700" : "text-red-600"}`}>
+                          {linkedPermit.statusName === "Active" ? "Aktywne" : linkedPermit.statusName}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] md:text-xs text-muted-foreground">Wolne sloty</p>
+                        <p className={`font-medium text-sm md:text-base ${linkedPermit.availableSlots > 0 ? "text-emerald-700" : "text-red-600"}`}>
+                          {linkedPermit.availableSlots} z {linkedPermit.maxFirearms}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] md:text-xs text-muted-foreground">Ważne do</p>
+                        <p className="font-medium text-sm md:text-base">{new Date(linkedPermit.expiryDate).toLocaleDateString("pl-PL")}</p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-border" />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3">
+                      {(() => {
+                        const today = new Date();
+                        const med = linkedPermit.medicalExamExpiryDate ? new Date(linkedPermit.medicalExamExpiryDate) : null;
+                        const psy = linkedPermit.psychologicalExamExpiryDate ? new Date(linkedPermit.psychologicalExamExpiryDate) : null;
+                        const medValid = med && med >= today;
+                        const psyValid = psy && psy >= today;
+                        return (
+                          <>
+                            <div className={`rounded-lg md:rounded-xl p-2.5 md:p-3 ${medValid ? "bg-emerald-50" : "bg-red-50"}`}>
+                              <p className="text-[11px] md:text-xs text-muted-foreground">Bad. lekarskie ważne do</p>
+                              <p className={`font-semibold text-sm md:text-base ${medValid ? "text-emerald-900" : "text-red-900"}`}>
+                                {med ? med.toLocaleDateString("pl-PL") : "Brak danych"}
+                                {!medValid && med && " (wygasło)"}
+                              </p>
+                            </div>
+                            <div className={`rounded-lg md:rounded-xl p-2.5 md:p-3 ${psyValid ? "bg-emerald-50" : "bg-red-50"}`}>
+                              <p className="text-[11px] md:text-xs text-muted-foreground">Bad. psychologiczne ważne do</p>
+                              <p className={`font-semibold text-sm md:text-base ${psyValid ? "text-emerald-900" : "text-red-900"}`}>
+                                {psy ? psy.toLocaleDateString("pl-PL") : "Brak danych"}
+                                {!psyValid && psy && " (wygasło)"}
+                              </p>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                    Nie udało się pobrać pozwolenia bazowego ({promiseApp.permitNumber}). Sprawdź, czy istnieje i czy jest aktywne.
+                    {citizenPermits.length > 0 && (
+                      <p className="mt-2 text-xs">Pozwolenia obywatela: {citizenPermits.map((p) => p.permitNumber).join(", ")}</p>
+                    )}
+                  </div>
+                )}
+              </ReviewCollapsibleCard>
+            )}
+
+            {!isReadOnly && (
+            <div className="order-7">
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="min-h-[52px] w-full rounded-xl text-sm md:text-base font-semibold"
+              >
+                {submitting ? "Zapisywanie..." : "Zatwierdź i wyślij"}
+              </Button>
+            </div>
+            )}
           </form>
         </div>
 
-        <div className="space-y-4">
-          <Card className="rounded-2xl border-none shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Wytyczne</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p><strong className="text-foreground">Weryfikacja:</strong> sprawdź ważność badań medycznych, zgodność danych obywatela oraz zasadność uzasadnienia.</p>
-                <p><strong className="text-foreground">Braki:</strong> wybierz &quot;Wezwij do uzupełnienia&quot; i wskaż konkretne braki.</p>
-                <p><strong className="text-foreground">Odrzucenie:</strong> wymaga uzasadnienia zgodnie z k.p.a. art. 107 § 1 pkt 6.</p>
-              </div>
-            </CardContent>
-          </Card>
+        {!isReadOnly && (
+        <div className="hidden lg:block space-y-4">
+          <ReviewCollapsibleCard
+            title="Wytyczne"
+            icon={applicationSectionIcon(<BookOpen className="h-5 w-5" />)}
+            defaultOpen
+          >
+            {guidelinesContent}
+          </ReviewCollapsibleCard>
         </div>
+        )}
       </div>
-
-      {previewAttachment && permitApp && (
-        <AttachmentPreviewDialog
-          open={!!previewAttachment}
-          onOpenChange={(open) => { if (!open) setPreviewAttachment(null); }}
-          fileName={previewAttachment.fileName}
-          contentType={previewAttachment.contentType}
-          fetchBlob={() => wpaService.downloadPermitApplicationAttachment(permitApp.id, previewAttachment.id)}
-        />
-      )}
     </div>
   );
 }

@@ -269,7 +269,7 @@ export interface CreateTransferRequestRequest {
 }
 
 // ============================================================================
-// MEDICAL ALERTS (Citizen view - computed from permits on frontend)
+// MEDICAL ALERTS (Citizen view — synced from permit exam dates via API)
 // ============================================================================
 
 export interface CitizenMedicalAlertDto {
@@ -387,6 +387,11 @@ export interface WpaPermitApplicationAttachmentDto {
   createdAt: string;
 }
 
+export interface UpdatePermitApplicationExamDatesRequest {
+  medicalExamExpiryDate: string;
+  psychologicalExamExpiryDate: string;
+}
+
 export interface ApprovePermitApplicationRequest {
   maxFirearms: number;
   medicalExamExpiryDate: string;
@@ -395,10 +400,14 @@ export interface ApprovePermitApplicationRequest {
 
 export interface RejectApplicationRequest {
   reason?: string;
+  medicalExamExpiryDate?: string;
+  psychologicalExamExpiryDate?: string;
 }
 
 export interface RequireCorrectionRequest {
   reason?: string;
+  medicalExamExpiryDate?: string;
+  psychologicalExamExpiryDate?: string;
 }
 
 export interface WpaPromiseApplicationDto {

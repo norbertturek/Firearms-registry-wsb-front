@@ -1,38 +1,41 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
 import { Separator } from "../components/ui/separator";
-import { User, Shield, AlertCircle, Clock } from "lucide-react";
+import { User, Shield, AlertCircle, Clock, CreditCard, Paperclip } from "lucide-react";
+import { Button } from "../components/ui/button";
+import { toast } from "sonner";
 import { wpaService } from "../../services/wpaService";
-import type { WpaPermitApplicationDto, WpaPromiseApplicationDto } from "../../types/api";
-
-const PERMIT_TYPE_LABELS: Record<string, string> = {
-  Sport: "Sportowe",
-  Hunting: "Łowieckie",
-  Collection: "Kolekcjonerskie",
-  Protection: "Ochrony osobistej",
-  Other: "Inne",
-};
+import { citizenService } from "../../services/citizenService";
+import { WpaApplicationReviewBar } from "../components/wpa/WpaApplicationReviewBar";
+import { PermitApplicationAttachmentsCard } from "../components/wpa/PermitApplicationAttachmentsCard";
+import { ReviewCollapsibleCard } from "../components/wpa/ReviewCollapsibleCard";
+import { ApplicationDetailField, applicationSectionIcon } from "../components/wpa/ApplicationDetailField";
+import { PromiseQrModal } from "../components/citizen/PromiseQrModal";
+import { formatApplicationId } from "../../lib/registryNumbers";
+import { getPromiseQrMatchResult, getPromiseQrUnavailableMessage } from "../../lib/promiseQrAvailability";
+import { getApplicationStatusMeta } from "../../lib/statusUi";
+import type {
+  WpaPermitApplicationDto,
+  WpaPromiseApplicationDto,
+  PermitApplicationDto,
+  PromiseApplicationDto,
+  CitizenProfileDto,
+  PermitDto,
+  PromiseDto,
+} from "../../types/api";
+import { getPermitApplicationTypeLabel } from "../utils/permitLabels";
 
 function getStatusBadge(status: string) {
-  switch (status) {
-    case "Submitted":
-      return <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none px-2 py-0.5 rounded-full">Złożony</Badge>;
-    case "Paid":
-      return <Badge variant="secondary" className="bg-cyan-100 text-cyan-800 hover:bg-cyan-200 border-none px-2 py-0.5 rounded-full">Opłacony</Badge>;
-    case "UnderReview":
-      return <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none px-2 py-0.5 rounded-full">W weryfikacji</Badge>;
-    case "Approved":
-      return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none px-2 py-0.5 rounded-full">Zatwierdzony</Badge>;
-    case "Rejected":
-      return <Badge variant="destructive" className="rounded-full px-2 py-0.5">Odrzucony</Badge>;
-    case "RequiresCorrection":
-      return <Badge variant="secondary" className="bg-orange-100 text-orange-800 hover:bg-orange-200 border-none px-2 py-0.5 rounded-full">Do uzupełnienia</Badge>;
-    default:
-      return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
+  const meta = getApplicationStatusMeta(status);
+  if (meta) {
+    return (
+      <Badge variant={meta.variant} className={meta.badgeClassName}>
+        {meta.label}
+      </Badge>
+    );
   }
+  return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
 }
 
 function formatDate(s: string) {
@@ -50,18 +53,89 @@ export function ApplicationDetails() {
   const type = (searchParams.get("type") as "permit" | "promise") || "permit";
   const isOfficer = localStorage.getItem("userRole") === "officer";
 
-  const [permitApp, setPermitApp] = useState<WpaPermitApplicationDto | null>(null);
-  const [promiseApp, setPromiseApp] = useState<WpaPromiseApplicationDto | null>(null);
+  const [permitApp, setPermitApp] = useState<WpaPermitApplicationDto | PermitApplicationDto | null>(null);
+  const [promiseApp, setPromiseApp] = useState<WpaPromiseApplicationDto | PromiseApplicationDto | null>(null);
+  const [profile, setProfile] = useState<CitizenProfileDto | null>(null);
+  const [linkedPermit, setLinkedPermit] = useState<PermitDto | null>(null);
+  const [issuedPromises, setIssuedPromises] = useState<PromiseDto[]>([]);
+  const [selectedPromiseId, setSelectedPromiseId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    const promise = type === "permit"
-      ? wpaService.getPermitApplicationById(id).then((d) => { setPermitApp(d); setPromiseApp(null); })
-      : wpaService.getPromiseApplicationById(id).then((d) => { setPromiseApp(d); setPermitApp(null); });
-    promise.catch(() => {}).finally(() => setLoading(false));
-  }, [id, type]);
+    setLinkedPermit(null);
+    setPermitApp(null);
+    setPromiseApp(null);
+    setProfile(null);
+
+    const load = async () => {
+      try {
+        if (isOfficer) {
+          if (type === "permit") {
+            const d = await wpaService.getPermitApplicationById(id);
+            setPermitApp(d);
+          } else {
+            const d = await wpaService.getPromiseApplicationById(id);
+            setPromiseApp(d);
+            try {
+              const citizen = await wpaService.getCitizenById(d.citizenId);
+              setLinkedPermit(citizen.permits.find((p) => p.id === d.permitId) ?? null);
+            } catch {
+              // optional context for review bar
+            }
+          }
+        } else if (type === "permit") {
+          const [apps, citizenProfile] = await Promise.all([
+            citizenService.getPermitApplications(),
+            citizenService.getProfile(),
+          ]);
+          setPermitApp(apps.find((item) => item.id === id) ?? null);
+          setProfile(citizenProfile);
+        } else {
+          const [apps, citizenProfile] = await Promise.all([
+            citizenService.getPromiseApplications(),
+            citizenService.getProfile(),
+          ]);
+          setPromiseApp(apps.find((item) => item.id === id) ?? null);
+          setProfile(citizenProfile);
+        }
+      } catch {
+        // not found — leave app null
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [id, type, isOfficer]);
+
+  useEffect(() => {
+    if (isOfficer) return;
+    citizenService
+      .getPromises()
+      .then(setIssuedPromises)
+      .catch(() => setIssuedPromises([]));
+  }, [isOfficer]);
+
+  const app = permitApp ?? promiseApp;
+  const selectedPromise = issuedPromises.find((promise) => promise.id === selectedPromiseId) ?? null;
+
+  const applicantName =
+    app && "citizenName" in app
+      ? app.citizenName
+      : profile
+        ? `${profile.firstName} ${profile.lastName}`.trim()
+        : "—";
+  const applicantPesel =
+    app && "citizenPesel" in app ? app.citizenPesel : profile?.peselMasked ?? "—";
+
+  useEffect(() => {
+    if (loading || !app || !id || !isOfficer) return;
+    if (["Submitted", "UnderReview", "Paid"].includes(app.statusName)) {
+      navigate(`/decision/${id}?type=${type}`, { replace: true });
+    }
+  }, [loading, app, id, type, isOfficer, navigate]);
 
   if (loading) {
     return (
@@ -73,7 +147,6 @@ export function ApplicationDetails() {
     );
   }
 
-  const app = permitApp ?? promiseApp;
   if (!app) {
     return (
       <div className="pt-2">
@@ -83,184 +156,231 @@ export function ApplicationDetails() {
   }
 
   const title = permitApp
-    ? `Wniosek o pozwolenie — ${PERMIT_TYPE_LABELS[permitApp.requestedPermitTypeName] ?? permitApp.requestedPermitTypeName}`
+    ? `Wniosek o pozwolenie — ${getPermitApplicationTypeLabel(permitApp)}`
     : promiseApp
       ? `Wniosek o promesę — ${promiseApp.requestedWeaponType}`
       : "Wniosek";
 
   return (
-    <div className="pt-2">
-      <div className="mb-6 px-1">
-        <div className="flex items-start justify-between mb-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex-1 pr-4">{title}</h1>
-          <div className="mt-1">{getStatusBadge(app.statusName)}</div>
+    <>
+      <div className="pt-2">
+      {isOfficer ? (
+        <WpaApplicationReviewBar
+          type={type}
+          permitApp={permitApp as WpaPermitApplicationDto | null}
+          promiseApp={promiseApp as WpaPromiseApplicationDto | null}
+          linkedPermit={linkedPermit}
+        />
+      ) : (
+        <div className="mb-6 px-1">
+          <div className="flex items-start justify-between mb-1">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground flex-1 pr-4">{title}</h1>
+            <div className="mt-1">{getStatusBadge(app.statusName)}</div>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Nr wniosku: <span className="font-mono text-foreground">{formatApplicationId(app.id)}</span>
+          </p>
         </div>
-        <p className="text-muted-foreground">Nr wniosku: <span className="font-mono">{app.id}</span></p>
-      </div>
+      )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
-          {/* Rejection / correction */}
+      <div className="grid gap-2.5 md:gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 flex flex-col gap-2.5 md:gap-4">
           {app.statusName === "Rejected" && app.rejectionReason && (
-            <Card className="rounded-2xl border-none shadow-sm bg-red-50/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="bg-red-100 p-2 rounded-xl text-red-600">
-                    <AlertCircle className="h-5 w-5" />
-                  </div>
-                  <CardTitle className="text-lg text-red-900">Powód odrzucenia</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-red-800 text-sm">{app.rejectionReason}</p>
-              </CardContent>
-            </Card>
+            <ReviewCollapsibleCard
+              title="Powód odrzucenia"
+              description="Decyzja negatywna WPA"
+              icon={applicationSectionIcon(<AlertCircle />)}
+              defaultOpen
+              priority
+              className="bg-red-50/50"
+            >
+              <p className="text-xs md:text-sm text-red-800 leading-relaxed whitespace-pre-wrap">{app.rejectionReason}</p>
+            </ReviewCollapsibleCard>
           )}
 
           {app.statusName === "RequiresCorrection" && app.correctionNotes && (
-            <Card className="rounded-2xl border-none shadow-sm bg-orange-50/50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="bg-orange-100 p-2 rounded-xl text-orange-600">
-                    <AlertCircle className="h-5 w-5" />
-                  </div>
-                  <CardTitle className="text-lg text-orange-900">Wezwanie do uzupełnienia</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-orange-900 text-sm">{app.correctionNotes}</p>
-              </CardContent>
-            </Card>
+            <ReviewCollapsibleCard
+              title="Wezwanie do uzupełnienia"
+              description="Uwagi urzędnika do poprawy wniosku"
+              icon={applicationSectionIcon(<AlertCircle />)}
+              defaultOpen
+              priority
+              className="bg-orange-50/50"
+            >
+              <p className="text-xs md:text-sm text-orange-900 leading-relaxed whitespace-pre-wrap">{app.correctionNotes}</p>
+            </ReviewCollapsibleCard>
           )}
 
-          {/* Applicant Info */}
-          <Card className="rounded-2xl border-none shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-3">
-                <div className="bg-primary/10 p-2 rounded-xl text-primary"><User className="h-5 w-5" /></div>
-                <CardTitle className="text-lg">Dane wnioskodawcy</CardTitle>
+          {isOfficer && (
+            <ReviewCollapsibleCard
+              title="Dane wnioskodawcy"
+              description="Identyfikacja osoby składającej wniosek"
+              icon={applicationSectionIcon(<User />)}
+              defaultOpen={false}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 md:gap-4">
+                <ApplicationDetailField label="Imię i nazwisko">{applicantName}</ApplicationDetailField>
+                <ApplicationDetailField label="PESEL" valueClassName="font-mono">
+                  {applicantPesel}
+                </ApplicationDetailField>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <p className="text-xs text-muted-foreground">Imię i nazwisko</p>
-                <p className="font-medium">{app.citizenName}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">PESEL</p>
-                <p className="font-medium font-mono">{app.citizenPesel}</p>
-              </div>
-            </CardContent>
-          </Card>
+            </ReviewCollapsibleCard>
+          )}
 
-          {/* Application body */}
           {permitApp && (
-            <Card className="rounded-2xl border-none shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="bg-primary/10 p-2 rounded-xl text-primary"><Shield className="h-5 w-5" /></div>
-                  <CardTitle className="text-lg">Informacje o pozwoleniu</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Rodzaj pozwolenia</p>
-                  <p className="font-medium">{PERMIT_TYPE_LABELS[permitApp.requestedPermitTypeName] ?? permitApp.requestedPermitTypeName}</p>
-                </div>
+            <ReviewCollapsibleCard
+              title="Informacje o pozwoleniu"
+              description="Rodzaj pozwolenia, uzasadnienie i ważność badań"
+              icon={applicationSectionIcon(<Shield />)}
+              defaultOpen
+            >
+              <div className="space-y-3 md:space-y-4">
+                <ApplicationDetailField label="Rodzaj pozwolenia">
+                  {getPermitApplicationTypeLabel(permitApp)}
+                </ApplicationDetailField>
                 <Separator className="bg-border" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Uzasadnienie</p>
-                  <p className="text-sm bg-muted/30 rounded-lg p-3 mt-1">{permitApp.reason}</p>
-                </div>
+                <ApplicationDetailField label="Uzasadnienie" valueClassName="font-normal">
+                  <p className="text-xs md:text-sm bg-muted/30 rounded-lg p-2.5 md:p-3 leading-relaxed whitespace-pre-wrap">
+                    {permitApp.reason}
+                  </p>
+                </ApplicationDetailField>
                 <Separator className="bg-border" />
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Ważność bad. lekarskiego</p>
-                    <p className="font-medium">{permitApp.medicalExamExpiryDate ? formatDate(permitApp.medicalExamExpiryDate) : "—"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Ważność bad. psychologicznego</p>
-                    <p className="font-medium">{permitApp.psychologicalExamExpiryDate ? formatDate(permitApp.psychologicalExamExpiryDate) : "—"}</p>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 md:gap-4">
+                  <ApplicationDetailField label="Ważność bad. lekarskiego">
+                    {permitApp.medicalExamExpiryDate ? formatDate(permitApp.medicalExamExpiryDate) : "—"}
+                  </ApplicationDetailField>
+                  <ApplicationDetailField label="Ważność bad. psychologicznego">
+                    {permitApp.psychologicalExamExpiryDate ? formatDate(permitApp.psychologicalExamExpiryDate) : "—"}
+                  </ApplicationDetailField>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </ReviewCollapsibleCard>
+          )}
+
+          {isOfficer && permitApp && (
+            <ReviewCollapsibleCard
+              title="Załączniki"
+              description="Zaświadczenia lekarskie i psychologiczne dołączone przez obywatela"
+              icon={applicationSectionIcon(<Paperclip />)}
+              defaultOpen={false}
+            >
+              <PermitApplicationAttachmentsCard
+                bare
+                applicationId={permitApp.id}
+                attachments={(permitApp.attachments ?? []) as WpaPermitApplicationDto["attachments"]}
+              />
+            </ReviewCollapsibleCard>
           )}
 
           {promiseApp && (
-            <Card className="rounded-2xl border-none shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="bg-primary/10 p-2 rounded-xl text-primary"><Shield className="h-5 w-5" /></div>
-                  <CardTitle className="text-lg">Informacje o promesie</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Pozwolenie bazowe</p>
-                  <p className="font-medium font-mono">{promiseApp.permitNumber}</p>
-                  <p className="text-xs text-muted-foreground mt-1">({promiseApp.permitType})</p>
-                </div>
+            <ReviewCollapsibleCard
+              title="Informacje o promesie"
+              description="Pozwolenie bazowe, broń i kod QR po wydaniu"
+              icon={applicationSectionIcon(<CreditCard />)}
+              defaultOpen
+            >
+              <div className="space-y-3 md:space-y-4">
+                <ApplicationDetailField label="Pozwolenie bazowe" valueClassName="font-mono">
+                  {promiseApp.permitNumber}
+                  {"permitType" in promiseApp && promiseApp.permitType && (
+                    <span className="block font-sans text-[11px] md:text-xs text-muted-foreground font-normal mt-0.5">
+                      ({promiseApp.permitType})
+                    </span>
+                  )}
+                </ApplicationDetailField>
                 <Separator className="bg-border" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Wnioskowana broń</p>
-                  <p className="font-medium">{promiseApp.requestedWeaponType}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 md:gap-4">
+                  <ApplicationDetailField label="Wnioskowana broń">{promiseApp.requestedWeaponType}</ApplicationDetailField>
+                  <ApplicationDetailField label="Ilość">{promiseApp.requestedQuantity} szt.</ApplicationDetailField>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Ilość</p>
-                  <p className="font-medium">{promiseApp.requestedQuantity} szt.</p>
-                </div>
-              </CardContent>
-            </Card>
+                {!isOfficer && (
+                  <>
+                    <Separator className="bg-border" />
+                    <div className="space-y-2 md:space-y-3">
+                      {(() => {
+                        const qrState = getPromiseQrMatchResult(promiseApp, issuedPromises);
+                        if (qrState.canOpenQrModal && qrState.issuedPromise) {
+                          return (
+                            <>
+                              <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
+                                Kod QR promesy jest gotowy. Możesz otworzyć go bez przechodzenia do innego widoku.
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full sm:w-auto rounded-xl min-h-[44px]"
+                                onClick={() => setSelectedPromiseId(qrState.issuedPromise!.id)}
+                              >
+                                Pokaż kod QR
+                              </Button>
+                            </>
+                          );
+                        }
+                        if (qrState.showPendingFallback) {
+                          return (
+                            <>
+                              <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
+                                Wniosek jest zaakceptowany, ale wydana promesa z kodem QR nie jest jeszcze dostępna.
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full sm:w-auto rounded-xl min-h-[44px]"
+                                onClick={() =>
+                                  toast.info("Wniosek został zaakceptowany, ale QR promesy nie jest jeszcze dostępny.")
+                                }
+                              >
+                                QR w przygotowaniu
+                              </Button>
+                            </>
+                          );
+                        }
+                        return (
+                          <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
+                            {getPromiseQrUnavailableMessage(promiseApp.statusName)}
+                          </p>
+                        );
+                      })()}
+                    </div>
+                  </>
+                )}
+              </div>
+            </ReviewCollapsibleCard>
           )}
         </div>
 
-        <div className="space-y-4">
-          <Card className="rounded-2xl border-none shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-3">
-                <div className="bg-primary/10 p-2 rounded-xl text-primary">
-                  <Clock className="h-5 w-5" />
-                </div>
-                <CardTitle className="text-lg">Status</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-xs text-muted-foreground mb-2">Aktualny status</p>
-                {getStatusBadge(app.statusName)}
-              </div>
+        <div className="flex flex-col gap-2.5 md:gap-4">
+          <ReviewCollapsibleCard
+            title="Status"
+            description="Postęp rozpatrzenia wniosku"
+            icon={applicationSectionIcon(<Clock />)}
+            defaultOpen
+          >
+            <div className="space-y-3 md:space-y-4">
+              <ApplicationDetailField label="Aktualny status">
+                <div className="mt-0.5">{getStatusBadge(app.statusName)}</div>
+              </ApplicationDetailField>
               <Separator className="bg-border" />
-              <div>
-                <p className="text-xs text-muted-foreground">Data złożenia</p>
-                <p className="font-medium">{formatDateTime(app.createdAt)}</p>
-              </div>
+              <ApplicationDetailField label="Data złożenia">{formatDateTime(app.createdAt)}</ApplicationDetailField>
               {app.reviewedAt && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Data rozpatrzenia</p>
-                  <p className="font-medium">{formatDateTime(app.reviewedAt)}</p>
-                </div>
+                <ApplicationDetailField label="Data rozpatrzenia">{formatDateTime(app.reviewedAt)}</ApplicationDetailField>
               )}
-              {app.reviewedByOfficerName && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Urzędnik</p>
-                  <p className="font-medium">{app.reviewedByOfficerName}</p>
-                </div>
+              {"reviewedByOfficerName" in app && app.reviewedByOfficerName && (
+                <ApplicationDetailField label="Urzędnik">{app.reviewedByOfficerName}</ApplicationDetailField>
               )}
-
-              {isOfficer && (app.statusName === "Submitted" || app.statusName === "UnderReview" || app.statusName === "Paid" || app.statusName === "RequiresCorrection") && (
-                <>
-                  <Separator className="bg-border" />
-                  <Button className="w-full rounded-xl mt-2" onClick={() => navigate(`/decision/${app.id}?type=${type}`)}>
-                    Przejdź do decyzji
-                  </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </ReviewCollapsibleCard>
         </div>
       </div>
-    </div>
+      </div>
+      <PromiseQrModal
+        open={Boolean(selectedPromise)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedPromiseId(null);
+        }}
+        promiseData={selectedPromise}
+      />
+    </>
   );
 }
 

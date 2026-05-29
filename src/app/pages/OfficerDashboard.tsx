@@ -1,59 +1,86 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { FileText, Clock, CheckCircle, XCircle, Shield, CreditCard, AlertTriangle, Search } from "lucide-react";
+import { Tabs, TabsContent, TabsTrigger } from "../components/ui/tabs";
+import { AppTabsList } from "../components/ui/AppTabsList";
+import { FileText, Clock, CheckCircle, Shield, CreditCard, AlertTriangle, Search, User, CalendarCheck, Ban } from "lucide-react";
+import { toast } from "sonner";
 import { wpaService } from "../../services/wpaService";
 import type { WpaPermitApplicationDto, WpaPromiseApplicationDto, WpaMedicalAlertDto } from "../../types/api";
-
-const PERMIT_TYPE_LABELS: Record<string, string> = {
-  Sport: "Sportowe",
-  Hunting: "Łowieckie",
-  Collection: "Kolekcjonerskie",
-  Protection: "Ochrony osobistej",
-  Other: "Inne",
-};
+import { getApplicationStatusMeta } from "../../lib/statusUi";
+import {
+  formatMedicalAlertDate,
+  getMedicalAlertTypeLabel,
+  isMedicalAlertExpired,
+} from "../../lib/medicalAlerts";
+import { ApplicationListTile } from "../components/wpa/ApplicationListTile";
+import { WpaListSectionHeader } from "../components/wpa/WpaListSectionHeader";
+import { WpaQuickToolCard } from "../components/wpa/WpaQuickToolCard";
+import { cn } from "../components/ui/utils";
+import { getPermitApplicationTypeLabel } from "../utils/permitLabels";
 
 function getStatusBadge(status: string) {
-  switch (status) {
-    case "Submitted":
-      return <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none px-2 py-0.5 rounded-full">Złożony</Badge>;
-    case "Paid":
-      return <Badge variant="secondary" className="bg-cyan-100 text-cyan-800 hover:bg-cyan-200 border-none px-2 py-0.5 rounded-full">Opłacony</Badge>;
-    case "UnderReview":
-      return <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none px-2 py-0.5 rounded-full">W weryfikacji</Badge>;
-    case "Approved":
-      return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none px-2 py-0.5 rounded-full">Zaakceptowany</Badge>;
-    case "Rejected":
-      return <Badge variant="destructive" className="rounded-full px-2 py-0.5">Odrzucony</Badge>;
-    case "RequiresCorrection":
-      return <Badge variant="secondary" className="bg-orange-100 text-orange-800 hover:bg-orange-200 border-none px-2 py-0.5 rounded-full">Do uzupełnienia</Badge>;
-    default:
-      return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
+  const meta = getApplicationStatusMeta(status);
+  if (!meta) {
+    return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
   }
-}
-
-function getAlertTypeLabel(type: string) {
-  switch (type) {
-    case "MedicalExamExpiring": return "Badanie lekarskie wygasa";
-    case "PsychologicalExamExpiring": return "Badanie psychologiczne wygasa";
-    case "MedicalExamExpired": return "Badanie lekarskie wygasło";
-    case "PsychologicalExamExpired": return "Badanie psychologiczne wygasło";
-    default: return type;
-  }
+  return <Badge variant={meta.variant} className={meta.badgeClassName}>{meta.label}</Badge>;
 }
 
 function getAlertBadge(type: string) {
-  if (type === "MedicalExamExpired" || type === "PsychologicalExamExpired") {
+  if (isMedicalAlertExpired(type)) {
     return <Badge variant="destructive" className="rounded-full px-2 py-0.5">Wygasło</Badge>;
   }
-  return <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none px-2 py-0.5 rounded-full">Uwaga</Badge>;
+  return <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none px-2 py-0.5 rounded-full">Wygasa</Badge>;
 }
 
 function formatDate(s: string) {
   return new Date(s).toLocaleDateString("pl-PL", { day: "numeric", month: "short", year: "numeric" });
+}
+
+const STATUS_PRIORITY: Record<string, number> = {
+  Submitted: 0,
+  Paid: 1,
+  UnderReview: 2,
+};
+
+function sortPendingApplications<T extends { statusName: string; createdAt: string }>(items: T[]) {
+  return [...items].sort((a, b) => {
+    const statusDiff = (STATUS_PRIORITY[a.statusName] ?? 9) - (STATUS_PRIORITY[b.statusName] ?? 9);
+    if (statusDiff !== 0) return statusDiff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
+
+function getTabCountBadge(count: number, tone: "default" | "alert" = "default") {
+  if (count <= 0) return null;
+  return (
+    <Badge
+      className={cn(
+        "ml-1.5 px-1.5 py-0 text-xs h-5 min-w-5",
+        tone === "alert"
+          ? "bg-amber-500 hover:bg-amber-600"
+          : "bg-slate-500 hover:bg-slate-600",
+      )}
+    >
+      {count > 99 ? "99+" : count}
+    </Badge>
+  );
+}
+
+function getMedicalAlertLines(alert: WpaMedicalAlertDto) {
+  const lines = [`Obywatel: ${alert.citizenName}`, `PESEL: ${alert.citizenPesel}`];
+  if (alert.permitNumber) {
+    lines.push(`Pozwolenie: ${alert.permitNumber}`);
+  }
+  if (alert.message) {
+    lines.push(alert.message);
+  }
+  if (alert.dueDate) {
+    lines.push(`Data wygaśnięcia: ${formatMedicalAlertDate(alert.dueDate)}`);
+  }
+  return lines;
 }
 
 export function OfficerDashboard() {
@@ -62,18 +89,23 @@ export function OfficerDashboard() {
   const [promiseApps, setPromiseApps] = useState<WpaPromiseApplicationDto[]>([]);
   const [alerts, setAlerts] = useState<WpaMedicalAlertDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [suspendingPermitId, setSuspendingPermitId] = useState<string | null>(null);
+
+  const loadAlerts = async () => {
+    const al = await wpaService.getMedicalAlerts({ page: 1, pageSize: 20, resolved: false });
+    setAlerts(al.items);
+  };
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [pa, pra, al] = await Promise.all([
+        const [pa, pra] = await Promise.all([
           wpaService.getPermitApplications({ page: 1, pageSize: 20 }),
           wpaService.getPromiseApplications({ page: 1, pageSize: 20 }),
-          wpaService.getMedicalAlerts({ page: 1, pageSize: 20, resolved: false }),
         ]);
         setPermitApps(pa.items);
         setPromiseApps(pra.items);
-        setAlerts(al.items);
+        await loadAlerts();
       } catch {
         // silent
       } finally {
@@ -83,314 +115,207 @@ export function OfficerDashboard() {
     load();
   }, []);
 
-  const pendingPermits = permitApps.filter((a) => a.statusName === "Submitted" || a.statusName === "UnderReview");
-  const pendingPromises = promiseApps.filter((a) => a.statusName === "Submitted" || a.statusName === "Paid" || a.statusName === "UnderReview");
-  const approvedToday = [...permitApps, ...promiseApps].filter((a) => {
-    if (a.statusName !== "Approved" || !a.reviewedAt) return false;
-    const d = new Date(a.reviewedAt);
-    const today = new Date();
-    return d.toDateString() === today.toDateString();
-  }).length;
-  const rejectedToday = [...permitApps, ...promiseApps].filter((a) => {
-    if (a.statusName !== "Rejected" || !a.reviewedAt) return false;
-    const d = new Date(a.reviewedAt);
-    const today = new Date();
-    return d.toDateString() === today.toDateString();
-  }).length;
+  const handleSuspendPermit = async (alert: WpaMedicalAlertDto) => {
+    if (!alert.permitId) {
+      toast.error("Brak powiązanego pozwolenia");
+      return;
+    }
+    const reason = window.prompt("Powód zawieszenia pozwolenia (np. wygasłe badanie):");
+    if (reason === null) return;
 
+    setSuspendingPermitId(alert.permitId);
+    try {
+      await wpaService.suspendPermit(alert.permitId, { reason: reason || undefined });
+      toast.success("Pozwolenie zawieszone");
+      await loadAlerts();
+    } catch (err: unknown) {
+      toast.error("Nie udało się zawiesić pozwolenia", {
+        description: err instanceof Error ? err.message : "Spróbuj ponownie",
+      });
+    } finally {
+      setSuspendingPermitId(null);
+    }
+  };
+
+  const pendingPermits = sortPendingApplications(
+    permitApps.filter((a) => a.statusName === "Submitted" || a.statusName === "UnderReview"),
+  );
+  const pendingPromises = sortPendingApplications(
+    promiseApps.filter((a) => a.statusName === "Submitted" || a.statusName === "Paid" || a.statusName === "UnderReview"),
+  );
+  const defaultTab = pendingPromises.length > pendingPermits.length ? "promises" : "permits";
   if (loading) {
     return (
-      <div className="pt-2">
-        <div className="mb-6 px-1">
-          <div className="h-8 w-48 bg-muted animate-pulse rounded-lg mb-2" />
-          <div className="h-4 w-64 bg-muted animate-pulse rounded" />
+      <div className="pt-1 md:pt-2">
+        <div className="mb-4 md:mb-6 px-0.5">
+          <div className="h-7 md:h-8 w-40 md:w-48 bg-muted animate-pulse rounded-lg mb-2" />
+          <div className="h-3.5 md:h-4 w-56 md:w-64 bg-muted animate-pulse rounded" />
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-          {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-24 rounded-2xl bg-muted animate-pulse" />)}
-        </div>
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <div key={i} className="h-28 rounded-2xl bg-muted animate-pulse" />)}
+        <div className="space-y-2 md:space-y-3">
+          {[1, 2, 3].map((i) => <div key={i} className="h-24 md:h-28 rounded-2xl bg-muted animate-pulse" />)}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="pt-2">
-      <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Panel urzędnika WPA</h1>
-        <p className="text-muted-foreground">Rozpatrywanie wniosków i zarządzanie decyzjami administracyjnymi</p>
+    <div className="pt-1 md:pt-2">
+      <div className="mb-4 md:mb-6 px-0.5">
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-0.5 md:mb-1">Panel urzędnika WPA</h1>
+        <p className="text-sm md:text-base text-muted-foreground leading-snug">Rozpatrywanie wniosków i zarządzanie decyzjami administracyjnymi</p>
       </div>
 
-      {/* Statistics */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-5 mb-6">
-        <Card className="rounded-2xl border-none shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Pozwolenia</p>
-                <p className="text-2xl font-bold">{pendingPermits.length}</p>
-              </div>
-              <div className="bg-blue-50 p-2 rounded-full">
-                <Shield className="h-5 w-5 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-none shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Promesy</p>
-                <p className="text-2xl font-bold">{pendingPromises.length}</p>
-              </div>
-              <div className="bg-blue-50 p-2 rounded-full">
-                <CreditCard className="h-5 w-5 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-none shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Alerty medyczne</p>
-                <p className="text-2xl font-bold">{alerts.length}</p>
-              </div>
-              <div className="bg-orange-50 p-2 rounded-full">
-                <AlertTriangle className="h-5 w-5 text-orange-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-none shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Zatwierdzone</p>
-                <p className="text-2xl font-bold">{approvedToday}</p>
-              </div>
-              <div className="bg-emerald-50 p-2 rounded-full">
-                <CheckCircle className="h-5 w-5 text-emerald-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-none shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Odrzucone</p>
-                <p className="text-2xl font-bold">{rejectedToday}</p>
-              </div>
-              <div className="bg-red-50 p-2 rounded-full">
-                <XCircle className="h-5 w-5 text-red-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="mb-6">
-        <h3 className="text-lg font-bold mb-3 px-1 text-foreground">Narzędzia WPA</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Card className="rounded-2xl border-none shadow-sm hover:bg-muted/30 transition-colors cursor-pointer active:scale-[0.98]" onClick={() => navigate("/wpa/search")}>
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="bg-primary/10 p-3 rounded-xl">
-                <Search className="h-6 w-6 text-primary" />
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-base mb-0.5">Wyszukiwarka</h4>
-                <p className="text-xs text-muted-foreground">Szukaj obywateli i broni w rejestrze</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border-none shadow-sm hover:bg-muted/30 transition-colors cursor-pointer active:scale-[0.98]" onClick={() => navigate("/applications")}>
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="bg-primary/10 p-3 rounded-xl">
-                <FileText className="h-6 w-6 text-primary" />
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-base mb-0.5">Wszystkie wnioski</h4>
-                <p className="text-xs text-muted-foreground">Przeglądaj archiwum wniosków</p>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="mb-4 md:mb-6">
+        <h3 className="text-base md:text-lg font-bold mb-2 md:mb-3 px-0.5 text-foreground">Narzędzia WPA</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
+          <WpaQuickToolCard
+            title="Wyszukiwarka"
+            description="Szukaj obywateli i broni w rejestrze"
+            icon={Search}
+            onClick={() => navigate("/wpa/search")}
+          />
+          <WpaQuickToolCard
+            title="Wszystkie wnioski"
+            description="Przeglądaj archiwum wniosków"
+            icon={FileText}
+            onClick={() => navigate("/applications")}
+          />
         </div>
       </div>
 
-      {/* Pending Work Tabs */}
-      <Tabs defaultValue="permits" className="space-y-6">
-        <TabsList className="grid grid-cols-3">
-          <TabsTrigger value="permits" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Pozwolenia</span>
-            <span className="sm:hidden">Pozw.</span>
-            <span className="ml-1">({pendingPermits.length})</span>
+      <Tabs defaultValue={defaultTab} className="space-y-4 md:space-y-6">
+        <AppTabsList className="grid grid-cols-3">
+          <TabsTrigger value="permits" className="flex items-center justify-center gap-1.5 rounded-xl text-xs sm:text-sm">
+            <Shield className="h-4 w-4 shrink-0" aria-hidden />
+            <span>Pozwolenia</span>
+            {getTabCountBadge(pendingPermits.length)}
           </TabsTrigger>
-          <TabsTrigger value="promises" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" />
-            <span className="hidden sm:inline">Promesy</span>
-            <span className="sm:hidden">Prom.</span>
-            <span className="ml-1">({pendingPromises.length})</span>
+          <TabsTrigger value="promises" className="flex items-center justify-center gap-1.5 rounded-xl text-xs sm:text-sm">
+            <CreditCard className="h-4 w-4 shrink-0" aria-hidden />
+            <span>Promesy</span>
+            {getTabCountBadge(pendingPromises.length)}
           </TabsTrigger>
-          <TabsTrigger value="alerts" className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="hidden sm:inline">Alerty</span>
-            <span className="sm:hidden">Alert.</span>
-            <span className="ml-1">({alerts.length})</span>
+          <TabsTrigger value="alerts" className="flex items-center justify-center gap-1.5 rounded-xl text-xs sm:text-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+            <span>Alerty</span>
+            {getTabCountBadge(alerts.length, "alert")}
           </TabsTrigger>
-        </TabsList>
+        </AppTabsList>
 
-        {/* Permit Applications Tab */}
-        <TabsContent value="permits" className="mt-0">
-          <Card className="rounded-2xl border-none shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Wnioski o pozwolenie na broń</CardTitle>
-              <CardDescription>Oczekujące wnioski do rozpatrzenia</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {pendingPermits.length > 0 ? (
-                <div className="space-y-3">
-                  {pendingPermits.map((app) => (
-                    <div key={app.id} className="bg-muted/30 rounded-2xl p-4 hover:bg-muted/50 transition-colors">
-                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-start gap-2 mb-2">
-                            <h3 className="flex-1 font-semibold text-base">
-                              Pozwolenie — {PERMIT_TYPE_LABELS[app.requestedPermitTypeName] ?? app.requestedPermitTypeName}
-                            </h3>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-1">Wnioskodawca: {app.citizenName}</p>
-                          <p className="text-sm text-muted-foreground">PESEL: {app.citizenPesel} • Data: {formatDate(app.createdAt)}</p>
-                          <div className="mt-3">{getStatusBadge(app.statusName)}</div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button onClick={() => navigate(`/applications/${app.id}?type=permit`)} variant="outline" className="min-h-[44px] rounded-xl">
-                            Szczegóły
-                          </Button>
-                          <Button onClick={() => navigate(`/decision/${app.id}?type=permit`)} className="min-h-[44px] rounded-xl">
-                            Rozpatrz
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Clock className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>Brak oczekujących wniosków o pozwolenie</p>
-                </div>
-              )}
-
-              {permitApps.length > 0 && (
-                <div className="mt-4 text-center">
-                  <Button onClick={() => navigate("/applications")} variant="outline" className="min-h-[44px] rounded-xl">
-                    Zobacz wszystkie wnioski
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <TabsContent value="permits" className="mt-0 space-y-3">
+          <WpaListSectionHeader
+            title="Wnioski o pozwolenie na broń"
+            description="Oczekujące wnioski do rozpatrzenia"
+          />
+          {pendingPermits.length > 0 ? (
+            <div className="space-y-3">
+              {pendingPermits.map((app) => (
+                  <ApplicationListTile
+                    key={app.id}
+                    icon={<Shield />}
+                    title={`Pozwolenie — ${getPermitApplicationTypeLabel(app)}`}
+                    lines={[`Wnioskodawca: ${app.citizenName}`, `PESEL: ${app.citizenPesel}`]}
+                    date={formatDate(app.createdAt)}
+                    statusBadge={getStatusBadge(app.statusName)}
+                    onClick={() => navigate(`/applications/${app.id}?type=permit`)}
+                  />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground rounded-2xl bg-muted/20">
+              <Clock className="h-10 w-10 md:h-12 md:w-12 mx-auto mb-2 md:mb-3 opacity-30" aria-hidden />
+              <p className="text-sm md:text-base">Brak oczekujących wniosków o pozwolenie</p>
+            </div>
+          )}
         </TabsContent>
 
-        {/* Promise Applications Tab */}
-        <TabsContent value="promises" className="mt-0">
-          <Card className="rounded-2xl border-none shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Wnioski o e-Promesę</CardTitle>
-              <CardDescription>Oczekujące wnioski do rozpatrzenia</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {pendingPromises.length > 0 ? (
-                <div className="space-y-3">
-                  {pendingPromises.map((app) => (
-                    <div key={app.id} className="bg-muted/30 rounded-2xl p-4 hover:bg-muted/50 transition-colors">
-                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-start gap-2 mb-2">
-                            <h3 className="flex-1 font-semibold text-base">{app.requestedWeaponType}</h3>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-1">Wnioskodawca: {app.citizenName}</p>
-                          <p className="text-sm text-muted-foreground">PESEL: {app.citizenPesel} • Data: {formatDate(app.createdAt)}</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Pozwolenie: {app.permitNumber} • Ilość: {app.requestedQuantity}
-                          </p>
-                          <div className="mt-3">{getStatusBadge(app.statusName)}</div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button onClick={() => navigate(`/applications/${app.id}?type=promise`)} variant="outline" className="min-h-[44px] rounded-xl">
-                            Szczegóły
-                          </Button>
-                          <Button onClick={() => navigate(`/decision/${app.id}?type=promise`)} className="min-h-[44px] rounded-xl">
-                            Rozpatrz
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Clock className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>Brak oczekujących wniosków o promesę</p>
-                </div>
-              )}
-
-              {promiseApps.length > 0 && (
-                <div className="mt-4 text-center">
-                  <Button onClick={() => navigate("/applications")} variant="outline" className="min-h-[44px] rounded-xl">
-                    Zobacz wszystkie wnioski
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <TabsContent value="promises" className="mt-0 space-y-3">
+          <WpaListSectionHeader
+            title="Wnioski o e-Promesę"
+            description="Oczekujące wnioski do rozpatrzenia"
+          />
+          {pendingPromises.length > 0 ? (
+            <div className="space-y-3">
+              {pendingPromises.map((app) => (
+                  <ApplicationListTile
+                    key={app.id}
+                    icon={<CreditCard />}
+                    title={app.requestedWeaponType}
+                    lines={[
+                      `Wnioskodawca: ${app.citizenName}`,
+                      `PESEL: ${app.citizenPesel}`,
+                      `Pozwolenie: ${app.permitNumber} · Ilość: ${app.requestedQuantity}`,
+                    ]}
+                    date={formatDate(app.createdAt)}
+                    statusBadge={getStatusBadge(app.statusName)}
+                    onClick={() => navigate(`/applications/${app.id}?type=promise`)}
+                  />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground rounded-2xl bg-muted/20">
+              <Clock className="h-10 w-10 md:h-12 md:w-12 mx-auto mb-2 md:mb-3 opacity-30" aria-hidden />
+              <p className="text-sm md:text-base">Brak oczekujących wniosków o promesę</p>
+            </div>
+          )}
         </TabsContent>
 
-        {/* Medical Alerts Tab */}
-        <TabsContent value="alerts" className="mt-0">
-          <Card className="rounded-2xl border-none shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Alerty medyczne</CardTitle>
-              <CardDescription>Wygasające i wygasłe badania lekarskie</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {alerts.length > 0 ? (
-                <div className="space-y-3">
-                  {alerts.map((alert) => (
-                    <div key={alert.id} className="bg-muted/30 rounded-2xl p-4 hover:bg-muted/50 transition-colors">
-                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-start gap-2 mb-2">
-                            <h3 className="flex-1 font-semibold text-base">{getAlertTypeLabel(alert.alertTypeName)}</h3>
-                            {getAlertBadge(alert.alertTypeName)}
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-1">Obywatel: {alert.citizenName}</p>
-                          <p className="text-sm text-muted-foreground">PESEL: {alert.citizenPesel}</p>
-                          {alert.dueDate && (
-                            <p className="text-xs text-muted-foreground mt-1">Data wygaśnięcia: {formatDate(alert.dueDate)}</p>
-                          )}
-                        </div>
-                      </div>
+        <TabsContent value="alerts" className="mt-0 space-y-3">
+          <WpaListSectionHeader
+            title="Alerty medyczne"
+            description="Wygasające i wygasłe badania lekarskie"
+          />
+          {alerts.length > 0 ? (
+            <div className="space-y-3">
+              {alerts.map((alert) => (
+                <ApplicationListTile
+                  key={alert.id}
+                  icon={<AlertTriangle />}
+                  title={getMedicalAlertTypeLabel(alert.alertTypeName)}
+                  lines={getMedicalAlertLines(alert)}
+                  statusBadge={getAlertBadge(alert.alertTypeName)}
+                  footer={
+                    <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        className="min-h-[44px] rounded-xl text-sm flex-1 sm:flex-none"
+                        onClick={() => navigate(`/wpa/citizens/${alert.citizenId}`)}
+                      >
+                        <User className="h-4 w-4 mr-2" aria-hidden />
+                        Profil
+                      </Button>
+                      {alert.permitId && (
+                        <Button
+                          variant="outline"
+                          className="min-h-[44px] rounded-xl text-sm flex-1 sm:flex-none"
+                          onClick={() => navigate(`/wpa/citizens/${alert.citizenId}?permitId=${alert.permitId}`)}
+                        >
+                          <CalendarCheck className="h-4 w-4 mr-2" aria-hidden />
+                          Aktualizuj badania
+                        </Button>
+                      )}
+                      {alert.permitId && isMedicalAlertExpired(alert.alertTypeName) && (
+                        <Button
+                          variant="destructive"
+                          className="min-h-[44px] rounded-xl text-sm flex-1 sm:flex-none"
+                          disabled={suspendingPermitId === alert.permitId}
+                          onClick={() => handleSuspendPermit(alert)}
+                        >
+                          <Ban className="h-4 w-4 mr-2" aria-hidden />
+                          {suspendingPermitId === alert.permitId ? "Zawieszanie..." : "Zawieś pozwolenie"}
+                        </Button>
+                      )}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>Brak aktywnych alertów medycznych</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground rounded-2xl bg-muted/20">
+              <CheckCircle className="h-10 w-10 md:h-12 md:w-12 mx-auto mb-2 md:mb-3 opacity-30" aria-hidden />
+              <p className="text-sm md:text-base">Brak aktywnych alertów medycznych</p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

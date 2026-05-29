@@ -1,17 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Search, Shield, CreditCard } from "lucide-react";
+import { Tabs, TabsContent, TabsTrigger } from "../components/ui/tabs";
+import { AppTabsList } from "../components/ui/AppTabsList";
+import { SearchBarWithFilters } from "../components/search/SearchBarWithFilters";
+import { SearchFiltersSheet, SearchFilterField, filterSelectTriggerClass } from "../components/search/SearchFiltersSheet";
+import { Shield, CreditCard } from "lucide-react";
+import { CitizenApplicationCard } from "../components/citizen/CitizenApplicationCard";
+import { toast } from "sonner";
 import { citizenService } from "../../services/citizenService";
 import { wpaService } from "../../services/wpaService";
+import { canApplyForPromise } from "../utils/permitEligibility";
+import { PermitRequiredForPromiseNotice } from "../components/citizen/PermitRequiredForPromiseNotice";
+import { getPermitApplicationTypeLabel } from "../utils/permitLabels";
+import { ApplicationListTile } from "../components/wpa/ApplicationListTile";
+import { WpaListSectionHeader } from "../components/wpa/WpaListSectionHeader";
+import { PromiseQrModal } from "../components/citizen/PromiseQrModal";
+import { getPromiseQrMatchResult } from "../../lib/promiseQrAvailability";
+import { getApplicationStatusMeta } from "../../lib/statusUi";
 import type {
   PermitApplicationDto,
   PromiseApplicationDto,
+  PromiseDto,
   WpaPermitApplicationDto,
   WpaPromiseApplicationDto,
 } from "../../types/api";
@@ -30,22 +42,15 @@ const PERMIT_TYPE_LABELS: Record<string, string> = {
 };
 
 function getStatusBadge(status: string) {
-  switch (status) {
-    case "Submitted":
-      return <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none px-2 py-0.5 rounded-full">Złożony</Badge>;
-    case "Paid":
-      return <Badge variant="secondary" className="bg-cyan-100 text-cyan-800 hover:bg-cyan-200 border-none px-2 py-0.5 rounded-full">Opłacony</Badge>;
-    case "UnderReview":
-      return <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none px-2 py-0.5 rounded-full">W weryfikacji</Badge>;
-    case "Approved":
-      return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none px-2 py-0.5 rounded-full">Zaakceptowany</Badge>;
-    case "Rejected":
-      return <Badge variant="destructive" className="rounded-full px-2 py-0.5">Odrzucony</Badge>;
-    case "RequiresCorrection":
-      return <Badge variant="secondary" className="bg-orange-100 text-orange-800 hover:bg-orange-200 border-none px-2 py-0.5 rounded-full">Wymaga uzupełnienia</Badge>;
-    default:
-      return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
+  const meta = getApplicationStatusMeta(status);
+  if (meta) {
+    return (
+      <Badge variant={meta.variant} className={meta.badgeClassName}>
+        {meta.label}
+      </Badge>
+    );
   }
+  return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
 }
 
 function formatDate(dateStr: string) {
@@ -63,10 +68,7 @@ function isWpaPromise(a: AnyPromise): a is WpaPromiseApplicationDto {
   return "citizenName" in a;
 }
 
-function getPermitTypeLabel(app: AnyPermit) {
-  const typeName = app.requestedPermitTypeName || String(app.requestedPermitType);
-  return PERMIT_TYPE_LABELS[typeName] ?? typeName;
-}
+type ApplicationSearchBy = "all" | "citizen" | "pesel" | "type" | "reason";
 
 export function ApplicationsList() {
   const navigate = useNavigate();
@@ -74,9 +76,16 @@ export function ApplicationsList() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [searchBy, setSearchBy] = useState<ApplicationSearchBy>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftStatusFilter, setDraftStatusFilter] = useState("all");
+  const [draftSearchBy, setDraftSearchBy] = useState<ApplicationSearchBy>("all");
   const [permitApps, setPermitApps] = useState<AnyPermit[]>([]);
   const [promiseApps, setPromiseApps] = useState<AnyPromise[]>([]);
+  const [issuedPromises, setIssuedPromises] = useState<PromiseDto[]>([]);
+  const [selectedPromiseId, setSelectedPromiseId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [promiseAllowed, setPromiseAllowed] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -89,12 +98,16 @@ export function ApplicationsList() {
           setPermitApps(pa.items);
           setPromiseApps(pra.items);
         } else {
-          const [pa, pra] = await Promise.all([
+          const [pa, pra, permits, promises] = await Promise.all([
             citizenService.getPermitApplications(),
             citizenService.getPromiseApplications(),
+            citizenService.getPermits(),
+            citizenService.getPromises(),
           ]);
           setPermitApps(pa);
           setPromiseApps(pra);
+          setIssuedPromises(promises);
+          setPromiseAllowed(canApplyForPromise(permits));
         }
       } catch {
         // silent
@@ -105,15 +118,35 @@ export function ApplicationsList() {
     load();
   }, [isOfficer]);
 
+  const matchApplicationSearch = (
+    search: string,
+    fields: { citizenName?: string; citizenPesel?: string; typeLabel?: string; reason?: string; id?: string },
+  ) => {
+    if (!search) return true;
+    if (searchBy === "citizen" && fields.citizenName) return fields.citizenName.toLowerCase().includes(search);
+    if (searchBy === "pesel" && fields.citizenPesel) return fields.citizenPesel.includes(search);
+    if (searchBy === "type" && fields.typeLabel) return fields.typeLabel.toLowerCase().includes(search);
+    if (searchBy === "reason" && fields.reason) return fields.reason.toLowerCase().includes(search);
+    return (
+      (fields.id?.toLowerCase().includes(search) ?? false)
+      || (fields.typeLabel?.toLowerCase().includes(search) ?? false)
+      || (fields.citizenName?.toLowerCase().includes(search) ?? false)
+      || (fields.citizenPesel?.includes(search) ?? false)
+      || (fields.reason?.toLowerCase().includes(search) ?? false)
+    );
+  };
+
   const filterPermit = (apps: AnyPermit[]) =>
     apps.filter((a) => {
       const search = searchTerm.toLowerCase();
-      const typeName = getPermitTypeLabel(a);
-      const matchSearch =
-        !searchTerm ||
-        a.id.toLowerCase().includes(search) ||
-        typeName.toLowerCase().includes(search) ||
-        (isWpaPermit(a) ? a.citizenName.toLowerCase().includes(search) || a.citizenPesel.includes(search) : a.reason.toLowerCase().includes(search));
+      const typeName = getPermitApplicationTypeLabel(a);
+      const matchSearch = matchApplicationSearch(search, {
+        id: a.id,
+        typeLabel: typeName,
+        citizenName: isWpaPermit(a) ? a.citizenName : undefined,
+        citizenPesel: isWpaPermit(a) ? a.citizenPesel : undefined,
+        reason: !isWpaPermit(a) ? a.reason : undefined,
+      });
       const matchStatus = statusFilter === "all" || a.statusName === statusFilter;
       return matchSearch && matchStatus;
     });
@@ -121,18 +154,67 @@ export function ApplicationsList() {
   const filterPromise = (apps: AnyPromise[]) =>
     apps.filter((a) => {
       const search = searchTerm.toLowerCase();
-      const matchSearch =
-        !searchTerm ||
-        a.id.toLowerCase().includes(search) ||
-        a.requestedWeaponType.toLowerCase().includes(search) ||
-        a.permitNumber.toLowerCase().includes(search) ||
-        (isWpaPromise(a) && (a.citizenName.toLowerCase().includes(search) || a.citizenPesel.includes(search)));
+      const matchSearch = matchApplicationSearch(search, {
+        id: a.id,
+        typeLabel: a.requestedWeaponType,
+        citizenName: isWpaPromise(a) ? a.citizenName : undefined,
+        citizenPesel: isWpaPromise(a) ? a.citizenPesel : undefined,
+        reason: a.permitNumber,
+      });
       const matchStatus = statusFilter === "all" || a.statusName === statusFilter;
       return matchSearch && matchStatus;
     });
 
   const filteredPermit = filterPermit(permitApps);
   const filteredPromise = filterPromise(promiseApps);
+  const selectedPromise = issuedPromises.find((promise) => promise.id === selectedPromiseId) ?? null;
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (statusFilter !== "all") count += 1;
+    if (searchBy !== "all") count += 1;
+    return count;
+  }, [statusFilter, searchBy]);
+
+  const searchPlaceholder = isOfficer
+    ? searchBy === "citizen" ? "Imię lub nazwisko wnioskodawcy..."
+      : searchBy === "pesel" ? "PESEL wnioskodawcy..."
+      : searchBy === "type" ? "Typ pozwolenia..."
+      : "Imię, PESEL, typ, numer..."
+    : searchBy === "type" ? "Typ pozwolenia..."
+      : searchBy === "reason" ? "Uzasadnienie wniosku..."
+      : "Typ broni, numer pozwolenia...";
+
+  const openFilters = () => {
+    setDraftStatusFilter(statusFilter);
+    setDraftSearchBy(searchBy);
+    setFiltersOpen(true);
+  };
+
+  const applyFilters = () => {
+    setStatusFilter(draftStatusFilter);
+    setSearchBy(draftSearchBy);
+    setFiltersOpen(false);
+  };
+
+  const resetFilters = () => {
+    setDraftStatusFilter("all");
+    setDraftSearchBy("all");
+  };
+
+  const clearActiveFilters = () => {
+    setStatusFilter("all");
+    setSearchBy("all");
+    setDraftStatusFilter("all");
+    setDraftSearchBy("all");
+  };
+
+  const clearSearchAndFilters = () => {
+    setSearchTerm("");
+    clearActiveFilters();
+  };
+
+  const hasActiveQuery = searchTerm.length > 0 || activeFilterCount > 0;
 
   if (loading) {
     return (
@@ -149,53 +231,67 @@ export function ApplicationsList() {
   }
 
   return (
-    <div className="pt-2">
-      <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">
+    <div className="pt-2 max-md:pb-2">
+      <div className="mb-4 px-1">
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-1">
           {isOfficer ? "Wnioski" : "Moje sprawy"}
         </h1>
-        <p className="text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {isOfficer ? "Wszystkie wnioski w systemie" : "Lista Twoich wniosków"}
         </p>
       </div>
 
-      <Card className="mb-6 rounded-2xl border-none shadow-sm">
-        <CardContent className="p-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label htmlFor="search" className="text-sm font-medium mb-2 block">Wyszukaj</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="search"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={isOfficer ? "Imię, PESEL, typ, numer pozwolenia..." : "Typ broni, numer pozwolenia..."}
-                  className="min-h-[44px] pl-10"
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="statusFilter" className="text-sm font-medium mb-2 block">Status</label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger id="statusFilter" className="min-h-[44px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Wszystkie</SelectItem>
-                  <SelectItem value="Submitted">Złożone</SelectItem>
-                  <SelectItem value="Paid">Opłacone</SelectItem>
-                  <SelectItem value="UnderReview">W weryfikacji</SelectItem>
-                  <SelectItem value="Approved">Zaakceptowane</SelectItem>
-                  <SelectItem value="Rejected">Odrzucone</SelectItem>
-                  <SelectItem value="RequiresCorrection">Wymagające uzupełnienia</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <SearchBarWithFilters
+        className="mb-4"
+        value={searchTerm}
+        onValueChange={setSearchTerm}
+        placeholder={searchPlaceholder}
+        ariaLabel="Wyszukaj wnioski"
+        activeFilterCount={activeFilterCount}
+        onFiltersClick={openFilters}
+      />
+
+      <SearchFiltersSheet
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        description="Ogranicz listę wniosków"
+        onApply={applyFilters}
+        onReset={resetFilters}
+      >
+        <SearchFilterField label="Szukaj w polu" htmlFor="applicationSearchBy">
+          <Select value={draftSearchBy} onValueChange={(v) => setDraftSearchBy(v as ApplicationSearchBy)}>
+            <SelectTrigger id="applicationSearchBy" className={filterSelectTriggerClass}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-[70] rounded-xl">
+              <SelectItem value="all">Wszystkie pola</SelectItem>
+              {isOfficer && <SelectItem value="citizen">Wnioskodawca</SelectItem>}
+              {isOfficer && <SelectItem value="pesel">PESEL</SelectItem>}
+              <SelectItem value="type">{isOfficer ? "Typ pozwolenia / broń" : "Typ pozwolenia"}</SelectItem>
+              {!isOfficer && <SelectItem value="reason">Uzasadnienie / nr pozwolenia</SelectItem>}
+            </SelectContent>
+          </Select>
+        </SearchFilterField>
+        <SearchFilterField label="Status" htmlFor="statusFilter">
+          <Select value={draftStatusFilter} onValueChange={setDraftStatusFilter}>
+            <SelectTrigger id="statusFilter" className={filterSelectTriggerClass}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-[70] rounded-xl">
+              <SelectItem value="all">Wszystkie</SelectItem>
+              <SelectItem value="Submitted">Złożone</SelectItem>
+              <SelectItem value="Paid">Opłacone</SelectItem>
+              <SelectItem value="UnderReview">W weryfikacji</SelectItem>
+              <SelectItem value="Approved">Zaakceptowane</SelectItem>
+              <SelectItem value="Rejected">Odrzucone</SelectItem>
+              <SelectItem value="RequiresCorrection">Wymagające uzupełnienia</SelectItem>
+            </SelectContent>
+          </Select>
+        </SearchFilterField>
+      </SearchFiltersSheet>
 
       <Tabs defaultValue="permits" className="space-y-6">
-        <TabsList className="grid grid-cols-2">
+        <AppTabsList className="grid grid-cols-2">
           <TabsTrigger value="permits" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
             <span>Pozwolenia ({filteredPermit.length})</span>
@@ -204,108 +300,206 @@ export function ApplicationsList() {
             <CreditCard className="h-4 w-4" />
             <span>Promesy ({filteredPromise.length})</span>
           </TabsTrigger>
-        </TabsList>
+        </AppTabsList>
 
         <TabsContent value="permits" className="mt-0">
-          <Card className="rounded-2xl border-none shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Wnioski o pozwolenie</CardTitle>
-              <CardDescription>{isOfficer ? "Wszyscy wnioskodawcy" : "Wnioski o wydanie pozwolenia na broń"}</CardDescription>
-            </CardHeader>
-            <CardContent>
+          {isOfficer ? (
+            <div className="space-y-3">
+              <WpaListSectionHeader
+                title="Wnioski o pozwolenie"
+                description="Wszyscy wnioskodawcy"
+              />
               {filteredPermit.length > 0 ? (
                 <div className="space-y-3">
-                  {filteredPermit.map((app) => (
-                    <div
-                      key={app.id}
-                      className={`bg-muted/30 rounded-xl p-4 hover:bg-muted/50 transition-colors ${isOfficer ? "cursor-pointer active:scale-[0.99]" : ""}`}
-                      onClick={isOfficer ? () => navigate(`/applications/${app.id}?type=permit`) : undefined}
-                    >
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-semibold text-base">
-                            Pozwolenie — {getPermitTypeLabel(app)}
-                          </h3>
-                          {getStatusBadge(app.statusName)}
-                        </div>
-                        {isWpaPermit(app) ? (
-                          <p className="text-sm text-muted-foreground">{app.citizenName} • PESEL: {app.citizenPesel}</p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground line-clamp-2">{app.reason}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground">Data złożenia: {formatDate(app.createdAt)}</p>
-                        {app.statusName === "RequiresCorrection" && app.correctionNotes && (
-                          <div className="bg-orange-50 rounded-lg p-2 text-xs text-orange-900">
-                            <strong>Uwagi:</strong> {app.correctionNotes}
-                          </div>
-                        )}
-                        {!isOfficer && app.statusName === "RequiresCorrection" && (
-                          <Button
-                            className="mt-2 min-h-[44px] rounded-xl"
-                            onClick={() => navigate(`/applications/${app.id}/correction?type=permit`)}
-                          >
-                            Uzupelnij wniosek
-                          </Button>
-                        )}
-                        {app.statusName === "Rejected" && app.rejectionReason && (
-                          <div className="bg-red-50 rounded-lg p-2 text-xs text-red-900">
-                            <strong>Powód odrzucenia:</strong> {app.rejectionReason}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                  {filteredPermit.map((app) => {
+                    const lines = isWpaPermit(app)
+                      ? [`Wnioskodawca: ${app.citizenName}`, `PESEL: ${app.citizenPesel}`]
+                      : [app.reason];
+
+                    return (
+                      <ApplicationListTile
+                        key={app.id}
+                        icon={<Shield />}
+                        title={`Pozwolenie — ${getPermitApplicationTypeLabel(app)}`}
+                        lines={lines}
+                        date={formatDate(app.createdAt)}
+                        statusBadge={getStatusBadge(app.statusName)}
+                        onClick={() => navigate(`/applications/${app.id}?type=permit`)}
+                      />
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p className="mb-3">Brak wniosków o pozwolenie</p>
-                  {!isOfficer && (
-                    <Button className="rounded-xl" onClick={() => navigate("/application/new-permit")}>
-                      Złóż wniosek
-                    </Button>
+                <div className="text-center py-8 text-muted-foreground rounded-2xl bg-muted/20">
+                  <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" aria-hidden />
+                  {hasActiveQuery ? (
+                    <>
+                      <p className="mb-3">Brak wniosków dla wybranych kryteriów</p>
+                      <Button variant="outline" className="rounded-xl min-h-[44px]" onClick={clearSearchAndFilters} aria-label="Wyczyść filtry">
+                        Wyczyść filtry
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="mb-3">Brak wniosków o pozwolenie</p>
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          ) : filteredPermit.length > 0 ? (
+            <div className="space-y-3">
+              {filteredPermit.map((app) => (
+                <CitizenApplicationCard
+                  key={app.id}
+                  variant="permit"
+                  title={`Wniosek o pozwolenie — ${getPermitApplicationTypeLabel(app)}`}
+                  subtitle={app.reason}
+                  date={formatDate(app.createdAt)}
+                  statusBadge={getStatusBadge(app.statusName)}
+                  onClick={() => navigate(`/applications/${app.id}?type=permit`)}
+                  footer={
+                    <>
+                      {app.statusName === "RequiresCorrection" && app.correctionNotes && (
+                        <div className="bg-orange-50 rounded-lg p-2 text-xs text-orange-900">
+                          <strong>Uwagi:</strong> {app.correctionNotes}
+                        </div>
+                      )}
+                      {app.statusName === "RequiresCorrection" && (
+                        <Button
+                          size="sm"
+                          className="rounded-xl"
+                          onClick={() => navigate(`/applications/${app.id}/correction?type=permit`)}
+                        >
+                          Uzupelnij wniosek
+                        </Button>
+                      )}
+                      {app.statusName === "Rejected" && app.rejectionReason && (
+                        <div className="bg-red-50 rounded-lg p-2 text-xs text-red-900">
+                          <strong>Powód odrzucenia:</strong> {app.rejectionReason}
+                        </div>
+                      )}
+                    </>
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              {hasActiveQuery ? (
+                <>
+                  <p className="mb-3">Brak wniosków dla wybranych kryteriów</p>
+                  <Button variant="outline" className="rounded-xl min-h-[44px]" onClick={clearSearchAndFilters} aria-label="Wyczyść filtry">
+                    Wyczyść filtry
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="mb-3">Brak wniosków o pozwolenie</p>
+                  <Button className="rounded-xl" onClick={() => navigate("/applications/new/permit")}>
+                    Złóż wniosek
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </TabsContent>
 
-        <TabsContent value="promises" className="mt-0">
-          <Card className="rounded-2xl border-none shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Wnioski o e-Promesę</CardTitle>
-              <CardDescription>{isOfficer ? "Wszyscy wnioskodawcy" : "Wnioski o wydanie promesy na zakup broni"}</CardDescription>
-            </CardHeader>
-            <CardContent>
+        <TabsContent value="promises" className="mt-0 space-y-4">
+          {!isOfficer && !promiseAllowed && (
+            <PermitRequiredForPromiseNotice />
+          )}
+
+          {isOfficer ? (
+            <div className="space-y-3">
+              <WpaListSectionHeader
+                title="Wnioski o e-Promesę"
+                description="Wszyscy wnioskodawcy"
+              />
               {filteredPromise.length > 0 ? (
                 <div className="space-y-3">
-                  {filteredPromise.map((app) => (
-                    <div
-                      key={app.id}
-                      className={`bg-muted/30 rounded-xl p-4 hover:bg-muted/50 transition-colors ${isOfficer ? "cursor-pointer active:scale-[0.99]" : ""}`}
-                      onClick={isOfficer ? () => navigate(`/applications/${app.id}?type=promise`) : undefined}
-                    >
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-semibold text-base">{app.requestedWeaponType}</h3>
-                          {getStatusBadge(app.statusName)}
-                        </div>
-                        {isWpaPromise(app) && (
-                          <p className="text-sm text-muted-foreground">{app.citizenName} • PESEL: {app.citizenPesel}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground">
-                          Pozwolenie: {app.permitNumber} • Ilość: {app.requestedQuantity}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Data złożenia: {formatDate(app.createdAt)}</p>
+                  {filteredPromise.map((app) => {
+                    const lines = isWpaPromise(app)
+                      ? [`Wnioskodawca: ${app.citizenName}`, `PESEL: ${app.citizenPesel}`, `Pozwolenie: ${app.permitNumber} · Ilość: ${app.requestedQuantity}`]
+                      : [`Pozwolenie: ${app.permitNumber} · Ilość: ${app.requestedQuantity}`];
+
+                    return (
+                      <ApplicationListTile
+                        key={app.id}
+                        icon={<CreditCard />}
+                        title={app.requestedWeaponType}
+                        lines={lines}
+                        date={formatDate(app.createdAt)}
+                        statusBadge={getStatusBadge(app.statusName)}
+                        onClick={() => navigate(`/applications/${app.id}?type=promise`)}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground rounded-2xl bg-muted/20">
+                  <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-30" aria-hidden />
+                  {hasActiveQuery ? (
+                    <>
+                      <p className="mb-3">Brak wniosków dla wybranych kryteriów</p>
+                      <Button variant="outline" className="rounded-xl min-h-[44px]" onClick={clearSearchAndFilters} aria-label="Wyczyść filtry">
+                        Wyczyść filtry
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="mb-3">Brak wniosków o promesę</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : filteredPromise.length > 0 ? (
+            <div className="space-y-3">
+              {filteredPromise.map((app) => {
+                const qrState = getPromiseQrMatchResult(app, issuedPromises);
+                return (
+                  <CitizenApplicationCard
+                    key={app.id}
+                    variant="promise"
+                    title={`Wniosek o e-Promesę — ${app.requestedWeaponType}`}
+                    subtitle={`Pozwolenie: ${app.permitNumber} · Ilość: ${app.requestedQuantity}`}
+                    date={formatDate(app.createdAt)}
+                    statusBadge={getStatusBadge(app.statusName)}
+                    onClick={() => navigate(`/applications/${app.id}?type=promise`)}
+                    footer={
+                      <>
+                        {(qrState.canOpenQrModal && qrState.issuedPromise) || qrState.showPendingFallback ? (
+                          <div className="w-full flex justify-center">
+                            {qrState.canOpenQrModal && qrState.issuedPromise ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl"
+                                onClick={() => setSelectedPromiseId(qrState.issuedPromise!.id)}
+                              >
+                                Pokaż kod QR
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl"
+                                onClick={() => {
+                                  toast.info("Wniosek został zaakceptowany, ale QR promesy nie jest jeszcze dostępny.");
+                                }}
+                              >
+                                QR w przygotowaniu
+                              </Button>
+                            )}
+                          </div>
+                        ) : null}
                         {app.statusName === "RequiresCorrection" && app.correctionNotes && (
                           <div className="bg-orange-50 rounded-lg p-2 text-xs text-orange-900">
                             <strong>Uwagi:</strong> {app.correctionNotes}
                           </div>
                         )}
-                        {!isOfficer && app.statusName === "RequiresCorrection" && (
+                        {app.statusName === "RequiresCorrection" && (
                           <Button
-                            className="mt-2 min-h-[44px] rounded-xl"
+                            size="sm"
+                            className="rounded-xl"
                             onClick={() => navigate(`/applications/${app.id}/correction?type=promise`)}
                           >
                             Uzupelnij wniosek
@@ -316,25 +510,43 @@ export function ApplicationsList() {
                             <strong>Powód odrzucenia:</strong> {app.rejectionReason}
                           </div>
                         )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      </>
+                    }
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              {hasActiveQuery ? (
+                <>
+                  <p className="mb-3">Brak wniosków dla wybranych kryteriów</p>
+                  <Button variant="outline" className="rounded-xl min-h-[44px]" onClick={clearSearchAndFilters} aria-label="Wyczyść filtry">
+                    Wyczyść filtry
+                  </Button>
+                </>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <>
                   <p className="mb-3">Brak wniosków o promesę</p>
-                  {!isOfficer && (
-                    <Button className="rounded-xl" onClick={() => navigate("/application/new-promise")}>
+                  {promiseAllowed && (
+                    <Button className="rounded-xl" onClick={() => navigate("/applications/new/promise")}>
                       Złóż wniosek o promesę
                     </Button>
                   )}
-                </div>
+                </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
+      <PromiseQrModal
+        open={Boolean(selectedPromise)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedPromiseId(null);
+        }}
+        promiseData={selectedPromise}
+      />
     </div>
   );
 }

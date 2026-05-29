@@ -1,5 +1,15 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
 
+function apiUrl(path: string): string {
+  const base = API_BASE_URL.replace(/\/$/, '');
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  const combined = `${base}${suffix}`;
+  if (combined.startsWith('http://') || combined.startsWith('https://')) {
+    return combined;
+  }
+  return new URL(combined, window.location.origin).toString();
+}
+
 const TOKEN_KEY = 'auth_token';
 const TOKEN_EXPIRY_KEY = 'auth_token_expiry';
 
@@ -53,6 +63,22 @@ function authHeadersWithoutContentType(): HeadersInit {
   };
 }
 
+async function request(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw {
+        message:
+          "Brak połączenia z API (load failed). Na telefonie użyj pnpm dev:mobile z mockami lub backendu w LAN — adres localhost z telefonu nie działa.",
+        networkError: true,
+        cause: err.message,
+      };
+    }
+    throw err;
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (res.status === 401) {
     clearAuth();
@@ -80,18 +106,18 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 const api = {
   async get<T>(path: string, params?: Record<string, any>): Promise<T> {
-    const url = new URL(`${API_BASE_URL}${path}`);
+    const url = new URL(apiUrl(path));
     if (params) {
       Object.entries(params).forEach(([k, v]) => {
         if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
       });
     }
-    const res = await fetch(url.toString(), { headers: authHeaders() });
+    const res = await request(url.toString(), { headers: authHeaders() });
     return handleResponse<T>(res);
   },
 
   async post<T>(path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await request(apiUrl(path), {
       method: 'POST',
       headers: authHeaders(),
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -100,7 +126,7 @@ const api = {
   },
 
   async postForm<T>(path: string, formData: FormData): Promise<T> {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await request(apiUrl(path), {
       method: 'POST',
       headers: authHeadersWithoutContentType(),
       body: formData,
@@ -109,7 +135,7 @@ const api = {
   },
 
   async getBlob(path: string): Promise<Blob> {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await request(apiUrl(path), {
       headers: authHeadersWithoutContentType(),
     });
     if (!res.ok) await handleResponse<never>(res);
@@ -117,7 +143,7 @@ const api = {
   },
 
   async patch<T>(path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await request(apiUrl(path), {
       method: 'PATCH',
       headers: authHeaders(),
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -126,7 +152,7 @@ const api = {
   },
 
   async put<T>(path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await request(apiUrl(path), {
       method: 'PUT',
       headers: authHeaders(),
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -135,7 +161,7 @@ const api = {
   },
 
   async delete<T>(path: string): Promise<T> {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await request(apiUrl(path), {
       method: 'DELETE',
       headers: authHeaders(),
     });

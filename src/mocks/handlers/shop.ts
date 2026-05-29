@@ -36,7 +36,7 @@ export const shopHandlers = [
       isValid: true,
       message: 'Promesa jest ważna',
       citizenName: 'Jan Kowalski',
-      permitNumber: permit?.permitNumber ?? 'PZ-2024-00001',
+      permitNumber: permit?.permitNumber ?? 'POZW-20240501-DEMO0001',
       permitType: permit?.permitTypeName ?? 'Sport',
       availableSlots: permit?.availableSlots ?? 4,
       weaponType: promise.weaponType,

@@ -1,84 +1,146 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
-import { CreditCard, FileText, Shield, ChevronRight } from "lucide-react";
+import { CreditCard, FileText, ChevronRight, Lock } from "lucide-react";
+import { citizenService } from "../../services/citizenService";
+import { canApplyForPromise } from "../utils/permitEligibility";
+import { PermitRequiredForPromiseNotice } from "../components/citizen/PermitRequiredForPromiseNotice";
+import { cn } from "../components/ui/utils";
+import {
+  CITIZEN_LIST_CARD_CLASS,
+  CITIZEN_LIST_CARD_CONTENT_CLASS,
+  CITIZEN_NAV_ICON_TONE,
+  CITIZEN_NAV_ICON_TONE_DISABLED,
+} from "../utils/citizenCardUi";
+
+type TypeSelectCardProps = {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  iconTone: string;
+  disabled?: boolean;
+  showChevron?: boolean;
+  onClick: () => void;
+};
+
+function TypeSelectCard({
+  title,
+  description,
+  icon: Icon,
+  iconTone,
+  disabled = false,
+  showChevron = true,
+  onClick,
+}: TypeSelectCardProps) {
+  return (
+    <Card
+      className={cn(
+        CITIZEN_LIST_CARD_CLASS,
+        disabled && "opacity-75 cursor-not-allowed bg-muted/20 active:scale-100",
+      )}
+      onClick={() => {
+        if (!disabled) onClick();
+      }}
+    >
+      <CardContent className={CITIZEN_LIST_CARD_CONTENT_CLASS}>
+        <div className="flex items-center gap-3">
+          <div className={cn("p-3 rounded-2xl shrink-0", iconTone)}>
+            <Icon className="h-6 w-6" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="font-semibold text-sm leading-snug text-foreground">{title}</h2>
+            <p className="text-xs text-muted-foreground leading-snug mt-0.5">{description}</p>
+          </div>
+          {showChevron && (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground self-center" aria-hidden />
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function ApplicationTypeSelect() {
   const navigate = useNavigate();
+  const [permitsLoading, setPermitsLoading] = useState(true);
+  const [promiseAllowed, setPromiseAllowed] = useState(false);
 
-  const options = [
-    {
-      title: "Pozwolenie na broń",
-      description: "Złóż wniosek o nowe pozwolenie na broń.",
-      path: "/application/new-permit",
-      icon: Shield,
-      badge: "Pozwolenie",
-      tone: "bg-blue-50 text-blue-700",
-    },
-    {
-      title: "e-Promesa",
-      description: "Złóż wniosek o promesę na zakup broni.",
-      path: "/application/new-promise",
-      icon: CreditCard,
-      badge: "Zakup broni",
-      tone: "bg-emerald-50 text-emerald-700",
-    },
-  ];
+  useEffect(() => {
+    citizenService
+      .getPermits()
+      .then((permits) => setPromiseAllowed(canApplyForPromise(permits)))
+      .catch(() => setPromiseAllowed(false))
+      .finally(() => setPermitsLoading(false));
+  }, []);
+
+  const permitOption = {
+    title: "Pozwolenie na broń",
+    description: "Złóż wniosek o nowe pozwolenie na broń.",
+    path: "/applications/new/permit",
+    icon: FileText,
+    tone: CITIZEN_NAV_ICON_TONE,
+  };
+
+  const promiseOption = {
+    title: "e-Promesa",
+    description: promiseAllowed
+      ? "Złóż wniosek o promesę na zakup broni."
+      : "Wymaga wcześniejszego aktywnego pozwolenia na broń.",
+    path: "/applications/new/promise",
+    icon: promiseAllowed ? CreditCard : Lock,
+    tone: promiseAllowed ? CITIZEN_NAV_ICON_TONE : CITIZEN_NAV_ICON_TONE_DISABLED,
+  };
 
   return (
-    <div className="pt-2 space-y-6">
+    <div className="pt-2 max-md:pb-2 space-y-4">
       <div className="px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-1">
           Nowy wniosek
         </h1>
-        <p className="text-muted-foreground">Wybierz typ sprawy, którą chcesz rozpocząć.</p>
+        <p className="text-sm text-muted-foreground">Wybierz typ sprawy, którą chcesz rozpocząć.</p>
       </div>
+
+      {!permitsLoading && !promiseAllowed && <PermitRequiredForPromiseNotice />}
 
       <div className="space-y-3">
-        {options.map(({ title, description, path, icon: Icon, badge, tone }) => (
-          <Card
-            key={path}
-            className="rounded-2xl border-none shadow-sm hover:bg-muted/30 transition-colors cursor-pointer active:scale-[0.99]"
-            onClick={() => navigate(path)}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-2xl ${tone}`}>
-                  <Icon className="h-7 w-7" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h2 className="font-semibold text-base text-foreground truncate">{title}</h2>
-                    <Badge variant="secondary" className="rounded-full border-none px-2 py-0.5 shrink-0">
-                      {badge}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground leading-snug">{description}</p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+        <TypeSelectCard
+          title={permitOption.title}
+          description={permitOption.description}
+          icon={permitOption.icon}
+          iconTone={permitOption.tone}
+          onClick={() => navigate(permitOption.path)}
+        />
 
-      <Card
-        className="rounded-2xl border-none shadow-sm hover:bg-muted/30 transition-colors cursor-pointer active:scale-[0.99]"
-        onClick={() => navigate("/applications")}
-      >
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <div className="bg-primary/10 p-2 rounded-xl text-primary shrink-0">
-              <FileText className="h-5 w-5" />
+        {permitsLoading ? (
+          <div className="h-24 rounded-2xl bg-muted animate-pulse" />
+        ) : (
+          <TypeSelectCard
+            title={promiseOption.title}
+            description={promiseOption.description}
+            icon={promiseOption.icon}
+            iconTone={promiseOption.tone}
+            disabled={!promiseAllowed}
+            showChevron={promiseAllowed}
+            onClick={() => navigate(promiseOption.path)}
+          />
+        )}
+
+        <Card className={CITIZEN_LIST_CARD_CLASS} onClick={() => navigate("/applications")}>
+          <CardContent className={CITIZEN_LIST_CARD_CONTENT_CLASS}>
+            <div className="flex items-center gap-3">
+              <div className={cn("p-3 rounded-2xl shrink-0", CITIZEN_NAV_ICON_TONE)}>
+                <FileText className="h-6 w-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm leading-snug text-foreground">Masz już rozpoczętą sprawę?</p>
+                <p className="text-xs text-muted-foreground leading-snug mt-0.5">Przejdź do listy wniosków</p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground self-center" aria-hidden />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-base text-foreground">Masz już rozpoczętą sprawę?</p>
-              <p className="text-sm text-muted-foreground leading-snug">Przejdź do listy wniosków</p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

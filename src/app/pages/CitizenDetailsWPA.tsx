@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useSearchParams } from "react-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { User, Shield, AlertTriangle, CalendarCheck } from "lucide-react";
+import { User, Shield, AlertTriangle, CalendarCheck, ChevronRight } from "lucide-react";
+import { CitizenNavIconTile } from "../components/citizen/CitizenNavIconTile";
 import { toast } from "sonner";
 import { wpaService } from "../../services/wpaService";
 import type { WpaCitizenDto } from "../../types/api";
+import { getPermitStatusMeta } from "../../lib/statusUi";
 
 const PERMIT_TYPE_LABELS: Record<string, string> = {
   Sport: "Sportowe",
@@ -20,18 +22,11 @@ const PERMIT_TYPE_LABELS: Record<string, string> = {
 };
 
 function getPermitStatusBadge(status: string) {
-  switch (status) {
-    case "Active":
-      return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none px-2 py-0.5 rounded-full">Aktywne</Badge>;
-    case "Suspended":
-      return <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none px-2 py-0.5 rounded-full">Zawieszone</Badge>;
-    case "Revoked":
-      return <Badge variant="destructive" className="rounded-full px-2 py-0.5">Cofnięte</Badge>;
-    case "Expired":
-      return <Badge variant="secondary" className="rounded-full px-2 py-0.5">Wygasłe</Badge>;
-    default:
-      return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
+  const meta = getPermitStatusMeta(status);
+  if (!meta) {
+    return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
   }
+  return <Badge variant={meta.variant} className={meta.badgeClassName}>{meta.label}</Badge>;
 }
 
 function formatDate(s: string) {
@@ -45,6 +40,8 @@ function toDateInput(s?: string | null) {
 export function CitizenDetailsWPA() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const permitIdFromQuery = searchParams.get("permitId");
   const [citizen, setCitizen] = useState<WpaCitizenDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingPermitId, setSavingPermitId] = useState<string | null>(null);
@@ -69,6 +66,17 @@ export function CitizenDetailsWPA() {
   useEffect(() => {
     loadCitizen();
   }, [id]);
+
+  useEffect(() => {
+    if (!citizen || !permitIdFromQuery) return;
+    const permit = citizen.permits.find((p) => p.id === permitIdFromQuery);
+    if (!permit) return;
+    setEditingPermitId(permit.id);
+    setExamForm({
+      medicalExamExpiryDate: toDateInput(permit.medicalExamExpiryDate),
+      psychologicalExamExpiryDate: toDateInput(permit.psychologicalExamExpiryDate),
+    });
+  }, [citizen, permitIdFromQuery]);
 
   const startEditingExams = (permit: WpaCitizenDto["permits"][number]) => {
     setEditingPermitId(permit.id);
@@ -123,7 +131,7 @@ export function CitizenDetailsWPA() {
   return (
     <div className="pt-2">
       <div className="mb-6 px-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Szczegóły obywatela</h1>
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-1">Szczegóły obywatela</h1>
         <p className="text-muted-foreground">Pełny profil i historia aktywności</p>
       </div>
 
@@ -133,9 +141,9 @@ export function CitizenDetailsWPA() {
           <Card className="rounded-2xl border-none shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3">
-                <div className="bg-primary/10 p-3 rounded-xl">
-                  <User className="h-6 w-6 text-primary" />
-                </div>
+                <CitizenNavIconTile>
+                  <User />
+                </CitizenNavIconTile>
                 <div>
                   <CardTitle className="text-lg">{citizen.firstName} {citizen.lastName}</CardTitle>
                   <CardDescription>PESEL: {citizen.pesel}</CardDescription>
@@ -187,20 +195,25 @@ export function CitizenDetailsWPA() {
               {citizen.permits.length > 0 ? (
                 <div className="space-y-3">
                   {citizen.permits.map((permit) => (
-                    <div key={permit.id} className="bg-muted/30 rounded-xl p-4">
-                      <div className="flex items-start gap-3 mb-3">
-                        <div className="bg-primary/10 p-2 rounded-lg mt-0.5">
-                          <Shield className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold text-base">
+                    <div
+                      key={permit.id}
+                      className="bg-muted/30 rounded-2xl p-4 cursor-pointer active:scale-[0.99]"
+                      onClick={() => navigate(`/permits/${permit.id}`)}
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <CitizenNavIconTile>
+                          <Shield />
+                        </CitizenNavIconTile>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold text-sm leading-snug text-foreground">
                               Pozwolenie {PERMIT_TYPE_LABELS[permit.permitTypeName] ?? permit.permitTypeName}
                             </h3>
                             {getPermitStatusBadge(permit.statusName)}
                           </div>
-                          <p className="text-xs font-mono text-muted-foreground">{permit.permitNumber}</p>
+                          <p className="text-xs font-mono text-muted-foreground mt-0.5">{permit.permitNumber}</p>
                         </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground self-center" aria-hidden />
                       </div>
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
@@ -248,7 +261,7 @@ export function CitizenDetailsWPA() {
                               <Input
                                 id={`medical-${permit.id}`}
                                 type="date"
-                                className="mt-2 min-h-[40px] rounded-xl"
+                                className="mt-2 min-h-[44px] rounded-xl"
                                 value={examForm.medicalExamExpiryDate}
                                 onChange={(e) => setExamForm({ ...examForm, medicalExamExpiryDate: e.target.value })}
                               />
@@ -258,7 +271,7 @@ export function CitizenDetailsWPA() {
                               <Input
                                 id={`psychological-${permit.id}`}
                                 type="date"
-                                className="mt-2 min-h-[40px] rounded-xl"
+                                className="mt-2 min-h-[44px] rounded-xl"
                                 value={examForm.psychologicalExamExpiryDate}
                                 onChange={(e) => setExamForm({ ...examForm, psychologicalExamExpiryDate: e.target.value })}
                               />
@@ -267,7 +280,7 @@ export function CitizenDetailsWPA() {
                           <div className="flex gap-2">
                             <Button
                               size="sm"
-                              className="min-h-[40px] rounded-xl"
+                              className="min-h-[44px] rounded-xl"
                               disabled={savingPermitId === permit.id}
                               onClick={() => saveMedicalExams(permit.id)}
                             >
@@ -276,7 +289,7 @@ export function CitizenDetailsWPA() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="min-h-[40px] rounded-xl"
+                              className="min-h-[44px] rounded-xl"
                               onClick={() => setEditingPermitId(null)}
                             >
                               Anuluj
@@ -287,7 +300,7 @@ export function CitizenDetailsWPA() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="min-h-[40px] rounded-xl"
+                          className="min-h-[44px] rounded-xl"
                           onClick={() => startEditingExams(permit)}
                         >
                           <CalendarCheck className="h-4 w-4 mr-2" />
@@ -315,8 +328,8 @@ export function CitizenDetailsWPA() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-orange-900 mb-3">Obywatel ma aktywne alerty medyczne wymagające uwagi.</p>
-                <Button variant="outline" size="sm" className="w-full min-h-[44px] rounded-xl" onClick={() => navigate("/applications")}>
-                  Zobacz wszystkie alerty
+                <Button variant="outline" size="sm" className="w-full min-h-[44px] rounded-xl" onClick={() => navigate("/officer")}>
+                  Wróć do panelu WPA
                 </Button>
               </CardContent>
             </Card>

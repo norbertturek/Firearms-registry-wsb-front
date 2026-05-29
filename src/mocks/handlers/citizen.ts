@@ -27,14 +27,23 @@ export const citizenHandlers = [
   ),
 
   http.post(`${BASE}/citizen/me/permit-applications`, async ({ request }) => {
-    const body = await request.json() as any;
+    const body = await request.json() as { requestedPermitType?: number | string; reason?: string };
+    const permitTypeNames = ['Sport', 'Collection', 'Protection', 'Hunting', 'Other'] as const;
+    const requestedPermitType =
+      typeof body.requestedPermitType === 'number'
+        ? body.requestedPermitType
+        : permitTypeNames.indexOf(body.requestedPermitType as (typeof permitTypeNames)[number]);
+    const requestedPermitTypeName =
+      typeof body.requestedPermitType === 'string'
+        ? body.requestedPermitType
+        : permitTypeNames[requestedPermitType] ?? 'Sport';
     const app = {
       id: db.uid(),
       citizenId: db.IDS.citizenProfile,
       citizenName: 'Jan Kowalski',
       citizenPesel: '90010*****',
-      requestedPermitType: body.requestedPermitType,
-      requestedPermitTypeName: body.requestedPermitType,
+      requestedPermitType,
+      requestedPermitTypeName,
       reason: body.reason,
       medicalExamExpiryDate: body.medicalExamExpiryDate ?? null,
       psychologicalExamExpiryDate: body.psychologicalExamExpiryDate ?? null,
@@ -55,10 +64,21 @@ export const citizenHandlers = [
     const app = db.permitApplications.find((a) => a.id === params.id);
     if (!app) return HttpResponse.json({ message: 'Not found' }, { status: 404 });
     const body = await request.json() as any;
+    const permitTypeNames = ['Sport', 'Collection', 'Protection', 'Hunting', 'Other'] as const;
+    const requestedPermitType =
+      typeof body.requestedPermitType === 'number'
+        ? body.requestedPermitType
+        : permitTypeNames.indexOf(body.requestedPermitType as (typeof permitTypeNames)[number]);
+    const requestedPermitTypeName =
+      typeof body.requestedPermitType === 'string'
+        ? body.requestedPermitType
+        : permitTypeNames[requestedPermitType] ?? 'Sport';
     Object.assign(app, {
-      requestedPermitType: body.requestedPermitType,
-      requestedPermitTypeName: body.requestedPermitType,
+      requestedPermitType,
+      requestedPermitTypeName,
       reason: body.reason,
+      medicalExamExpiryDate: body.medicalExamExpiryDate ?? app.medicalExamExpiryDate,
+      psychologicalExamExpiryDate: body.psychologicalExamExpiryDate ?? app.psychologicalExamExpiryDate,
       status: 'Submitted',
       statusName: 'Submitted',
       correctionNotes: null,
@@ -66,19 +86,78 @@ export const citizenHandlers = [
     return HttpResponse.json(app);
   }),
 
-  http.post(`${BASE}/citizen/me/permit-applications/:id/attachments`, ({ params }) => {
+  http.post(`${BASE}/citizen/me/permit-applications/:id/attachments`, async ({ params, request }) => {
     const app = db.permitApplications.find((a) => a.id === params.id);
-    const att = {
-      id: db.uid(),
-      attachmentType: 'MedicalCertificate',
-      attachmentTypeName: 'MedicalCertificate',
-      fileName: 'dokument.pdf',
-      contentType: 'application/pdf',
-      fileSize: 102_400,
-      createdAt: new Date().toISOString(),
+    if (!app) {
+      return HttpResponse.json({ message: 'Not found' }, { status: 404 });
+    }
+
+    const uploaded: Array<{
+      id: string;
+      attachmentType: string;
+      attachmentTypeName: string;
+      fileName: string;
+      contentType: string;
+      fileSize: number;
+      createdAt: string;
+    }> = [];
+
+    const addAttachment = (
+      type: 'MedicalCertificate' | 'PsychologicalCertificate',
+      file: File,
+    ) => {
+      app.attachments = app.attachments.filter(
+        (existing: { attachmentType: string }) => existing.attachmentType !== type,
+      );
+      const att = {
+        id: db.uid(),
+        attachmentType: type,
+        attachmentTypeName: type,
+        fileName: file.name || (type === 'MedicalCertificate' ? 'badanie-lekarskie.pdf' : 'badanie-psychologiczne.pdf'),
+        contentType: file.type || 'application/pdf',
+        fileSize: file.size,
+        createdAt: new Date().toISOString(),
+      };
+      app.attachments.push(att);
+      uploaded.push(att);
     };
-    if (app) app.attachments.push(att);
-    return HttpResponse.json([att], { status: 201 });
+
+    const contentType = request.headers.get('content-type') ?? '';
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      const medical = formData.get('medicalCertificate');
+      const psychological = formData.get('psychologicalCertificate');
+      const medicalExpiry = formData.get('medicalExamExpiryDate');
+      const psychologicalExpiry = formData.get('psychologicalExamExpiryDate');
+      if (typeof medicalExpiry === 'string' && medicalExpiry) {
+        app.medicalExamExpiryDate = medicalExpiry.includes('T')
+          ? medicalExpiry
+          : `${medicalExpiry}T00:00:00Z`;
+      }
+      if (typeof psychologicalExpiry === 'string' && psychologicalExpiry) {
+        app.psychologicalExamExpiryDate = psychologicalExpiry.includes('T')
+          ? psychologicalExpiry
+          : `${psychologicalExpiry}T00:00:00Z`;
+      }
+      if (medical instanceof File && medical.size > 0) {
+        addAttachment('MedicalCertificate', medical);
+      }
+      if (psychological instanceof File && psychological.size > 0) {
+        addAttachment('PsychologicalCertificate', psychological);
+      }
+    } else {
+      addAttachment('MedicalCertificate', new File(['mock'], 'badanie-lekarskie.pdf', { type: 'application/pdf' }));
+      addAttachment(
+        'PsychologicalCertificate',
+        new File(['mock'], 'badanie-psychologiczne.pdf', { type: 'application/pdf' }),
+      );
+    }
+
+    if (uploaded.length === 0) {
+      return HttpResponse.json({ message: 'At least one certificate file is required' }, { status: 400 });
+    }
+
+    return HttpResponse.json(app.attachments, { status: 200 });
   }),
 
   // ── Promise applications ───────────────────────────────────────────────────
@@ -190,5 +269,8 @@ export const citizenHandlers = [
   }),
 
   // ── Medical alerts ─────────────────────────────────────────────────────────
-  http.get(`${BASE}/citizen/me/medical-alerts`, () => HttpResponse.json(db.medicalAlerts)),
+  http.get(`${BASE}/citizen/me/medical-alerts`, () => {
+    db.syncMedicalAlertsFromPermits();
+    return HttpResponse.json(db.medicalAlerts.filter((a) => !a.isResolved));
+  }),
 ];

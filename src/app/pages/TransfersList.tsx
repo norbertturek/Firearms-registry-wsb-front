@@ -1,40 +1,36 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Tabs, TabsContent, TabsTrigger } from "../components/ui/tabs";
+import { AppTabsList } from "../components/ui/AppTabsList";
 import { ArrowRightLeft, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { citizenService, translateTransferError } from "../../services/citizenService";
 import type { TransferRequestDto } from "../../types/api";
+import { getTransferRequestStatusMeta } from "../../lib/statusUi";
+import { DateStatusMeta } from "../components/DateStatusMeta";
+import { CITIZEN_LIST_CARD_CONTENT_CLASS } from "../utils/citizenCardUi";
+
+const TRANSFER_STATUS_ICON: Record<string, ReactNode> = {
+  PendingAcceptance: <Clock className="h-3 w-3 mr-1" />,
+  Accepted: <CheckCircle className="h-3 w-3 mr-1" />,
+  Completed: <CheckCircle className="h-3 w-3 mr-1" />,
+  Rejected: <XCircle className="h-3 w-3 mr-1" />,
+};
 
 function getStatusBadge(status: string) {
-  switch (status) {
-    case "PendingAcceptance":
-      return (
-        <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-none px-2 py-0.5 rounded-full">
-          <Clock className="h-3 w-3 mr-1" />Oczekuje
-        </Badge>
-      );
-    case "Accepted":
-    case "Completed":
-      return (
-        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none px-2 py-0.5 rounded-full">
-          <CheckCircle className="h-3 w-3 mr-1" />Zakończony
-        </Badge>
-      );
-    case "Rejected":
-      return (
-        <Badge variant="destructive" className="px-2 py-0.5 rounded-full">
-          <XCircle className="h-3 w-3 mr-1" />Odrzucony
-        </Badge>
-      );
-    case "Cancelled":
-      return <Badge variant="secondary" className="px-2 py-0.5 rounded-full">Anulowany</Badge>;
-    default:
-      return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
+  const meta = getTransferRequestStatusMeta(status);
+  if (!meta) {
+    return <Badge className="rounded-full px-2 py-0.5">{status}</Badge>;
   }
+  return (
+    <Badge variant={meta.variant} className={meta.badgeClassName}>
+      {TRANSFER_STATUS_ICON[status]}
+      {meta.label}
+    </Badge>
+  );
 }
 
 const TRANSFER_TYPE_LABELS: Record<string, string> = {
@@ -118,15 +114,15 @@ export function TransfersList() {
   };
 
   const TransferCard = ({ t }: { t: TransferRequestDto }) => (
-    <Card className="rounded-2xl border-none shadow-sm">
-      <CardContent className="p-4">
+    <Card className="rounded-2xl border-none shadow-sm gap-0">
+      <CardContent className={CITIZEN_LIST_CARD_CONTENT_CLASS}>
         <div className="space-y-4">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="font-semibold text-base">{t.firearmDescription}</h3>
-                {getStatusBadge(t.statusName)}
-              </div>
+              <h3 className="font-semibold text-base mb-2">{t.firearmDescription}</h3>
+              <DateStatusMeta className="mb-3" emphasizeDate statusBadge={getStatusBadge(t.statusName)}>
+                Zgłoszono: {formatDate(t.createdAt)}
+              </DateStatusMeta>
               <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                 {t.isBuyer && t.buyerName == null && (
                   <div>
@@ -150,14 +146,9 @@ export function TransfersList() {
                     {TRANSFER_TYPE_LABELS[t.transferTypeName] ?? t.transferTypeName}
                   </span>
                 </div>
-                <div>
-                  <span className="block">Data zgłoszenia:</span>
-                  <span className="font-medium text-foreground">{formatDate(t.createdAt)}</span>
-                </div>
                 {t.transactionDate && (
-                  <div>
-                    <span className="block">Data zakończenia:</span>
-                    <span className="font-medium text-foreground">{formatDate(t.transactionDate)}</span>
+                  <div className="col-span-2">
+                    <DateStatusMeta>Zakończono: {formatDate(t.transactionDate)}</DateStatusMeta>
                   </div>
                 )}
               </div>
@@ -235,7 +226,7 @@ export function TransfersList() {
       <div className="mb-6 px-1">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Transfery broni</h1>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-1">Transfery broni</h1>
             <p className="text-muted-foreground">Zarządzaj transferami między obywatelami</p>
           </div>
           <Button size="sm" className="rounded-xl" onClick={() => navigate("/weapons")}>
@@ -245,7 +236,7 @@ export function TransfersList() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 rounded-2xl bg-muted/50 p-1">
+        <AppTabsList className="grid grid-cols-3">
           <TabsTrigger value="incoming" className="rounded-xl">
             Przychodzące
             {incoming.length > 0 && (
@@ -256,7 +247,7 @@ export function TransfersList() {
           </TabsTrigger>
           <TabsTrigger value="outgoing" className="rounded-xl">Wychodzące</TabsTrigger>
           <TabsTrigger value="completed" className="rounded-xl">Historia</TabsTrigger>
-        </TabsList>
+        </AppTabsList>
 
         <TabsContent value="incoming" className="space-y-4">
           {incoming.length === 0
